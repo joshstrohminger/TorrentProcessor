@@ -1,0 +1,22 @@
+{
+  "name": "torrentprocessor",
+  "version": "1.0.0",
+  "description": "This is a utility for handling torrents once they have been completed.",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joshstrohminger/TorrentProcessor.git"
+  },
+  "author": "Josh Strohminger",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/joshstrohminger/TorrentProcessor/issues"
+  },
+  "homepage": "https://github.com/joshstrohminger/TorrentProcessor#readme",
+  "dependencies": {
+    "yargs": "^11.0.0"
+  }
+}
