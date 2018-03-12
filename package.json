@@ -17,6 +17,11 @@
   },
   "homepage": "https://github.com/joshstrohminger/TorrentProcessor#readme",
   "dependencies": {
+    "chalk": "^2.3.2",
+    "pretty-bytes": "^4.0.2",
     "yargs": "^11.0.0"
+  },
+  "yargs": {
+    "duplicate-arguments-array": false
   }
 }

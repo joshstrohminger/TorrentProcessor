@@ -7,8 +7,11 @@
         {
             "type": "node",
             "request": "launch",
-            "name": "Launch Program",
-            "program": "${workspaceFolder}/app.js"
+            "name": "Copy Command",
+            "program": "${workspaceFolder}/app.js",
+            "args":[
+                "copy", "-N", "a", "-L", "TvSingle", "-R", "a", "-D", "d", "-C", "d", "-Z", "a", "-T", "a", "-I", "s", "-f", "asd"
+            ]
         }
     ]
 }
