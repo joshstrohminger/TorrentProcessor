@@ -19,6 +19,7 @@
   "dependencies": {
     "chalk": "^2.3.2",
     "pretty-bytes": "^4.0.2",
+    "winston": "^2.4.1",
     "yargs": "^11.0.0"
   },
   "yargs": {
