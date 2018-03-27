@@ -7,7 +7,7 @@ const prettyBytes = require('pretty-bytes');
 const winston = require('winston');
 
 const env = process.env.NODE_ENV || 'development';
-const logDir = 'log';
+const logDir = path.join(__dirname, 'log');
 const tsFormat = () => new Date().toISOString();
 if (!fs.existsSync(logDir)) {
     fs.mkdirSync(logDir);
