@@ -45,6 +45,7 @@ const argv = require('yargs')
             .option('o', { demandOption: true, requiresArg: true, type: 'string', alias: ['O', 'OutputPath'], description: 'Output root directory' });
     }, copyCommandHandler)
     .demandCommand()
+    .option('practice', {requiresArg: false, type: 'boolean', alias: ['p','P'], description: "Don't actually do anything, just print/log like it to see if it works"})
     .help('h')
     .alias('h', 'H')
     .alias('h', 'help')
@@ -84,7 +85,9 @@ function copyTvSingle(argv) {
         var destinationPath = path.normalize(path.join(argv.OutputPath, 'TV', destinationName));
         if (fs.existsSync(destinationPath)) throw "Destination already exists: '" + destinationPath + "'";
         logPair('Copying', prettyBytes(argv.Bytes) + 'bytes from "' + sourcePath + '" to "' + destinationPath + '"');
-        fs.copyFileSync(sourcePath, destinationPath, fs.constants.COPYFILE_EXCL);
+        if(!argv.practice) {
+            fs.copyFileSync(sourcePath, destinationPath, fs.constants.COPYFILE_EXCL);
+        }
     } else if (argv.NumberOfFiles > 1) {
         log.info('Multiple files at: ' + argv.ContentPath);
     }
