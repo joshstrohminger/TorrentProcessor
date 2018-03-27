@@ -69,11 +69,65 @@ function processingErrorHandler(message) {
 }
 
 function copyMoviesSingle(argv) {
-    if (argv.NumberOfFiles === 1) {
-        log.info('Content: ' + argv.ContentPath);
-    } else if (argv.NumberOfFiles > 1) {
-        log.info('Multiple files at: ' + argv.ContentPath);
+    if(argv.NumberOfFiles <= 0) {
+        throw 'NumberOfFiles must be greater than zero';
     }
+    if (argv.NumberOfFiles === 1) {
+        var name = parseMovieName(argv.Name);
+        var sourcePath = argv.ContentPath;
+        if (!fs.existsSync(sourcePath)) throw "Source doesn't exist: '" + sourcePath + "'";
+        var destinationName = name + path.extname(sourcePath);
+        var destinationPath = path.normalize(path.join(argv.OutputPath, 'Movies', destinationName));
+        if (fs.existsSync(destinationPath)) throw "Destination already exists: '" + destinationPath + "'";
+        logPair('Copying', prettyBytes(argv.Bytes) + 'bytes from "' + sourcePath + '" to "' + destinationPath + '"');
+        if(!argv.practice) {
+            fs.copyFileSync(sourcePath, destinationPath, fs.constants.COPYFILE_EXCL);
+        }
+    } else if (argv.NumberOfFiles === 2) {
+        // assume the second file is english subtitles
+        var name = parseMovieName(argv.Name);
+        var files = getFiles(argv.ContentPath, {
+            Video: file => !isSubtitleFile(file),
+            Subtitles: file => isSubtitleFile(file)
+        });
+        var videoDestination = path.normalize(path.join(argv.OutputPath, 'Movies', name + path.extname(files.Video)));
+        var subtitlesDestination = path.normalize(path.join(argv.OutputPath, 'Movies', name + '.en' + path.extname(files.Subtitles)));
+        if (fs.existsSync(videoDestination)) throw "Video destination already exists: '" + videoDestination + "'";
+        if (fs.existsSync(subtitlesDestination)) throw "Subtitles destination already exists: '" + subtitlesDestination + "'";
+        logPair('Copying', prettyBytes(argv.Bytes) + 'bytes from "' + files.Video + '" to "' + videoDestination + '"');
+        if(!argv.practice) {
+            fs.copyFileSync(files.Video, videoDestination, fs.constants.COPYFILE_EXCL);
+        }
+        logPair('Copying', prettyBytes(argv.Bytes) + 'bytes from "' + files.Subtitles + '" to "' + subtitlesDestination + '"');
+        if(!argv.practice) {
+            fs.copyFileSync(files.Subtitles, subtitlesDestination, fs.constants.COPYFILE_EXCL);
+        }
+    } else {
+        throw `Handling ${argv.NumberOfFiles} movie files is not yet supported`;
+    }
+}
+
+function getFiles(directory, criteria) {
+    let files = fs.readdirSync(directory);
+    let foundFiles = {};
+    for(var name in criteria) {
+        let criterion = criteria[name];
+        for(var file of files) {
+            if(criterion(file)) {
+                foundFiles[name] = file;
+                break;
+            }
+        }
+        if(!foundFiles[name]) {
+            throw 'Failed to find file matching criteron: ' + name;
+        }
+    }
+    return foundFiles;
+}
+
+const supportedSubtitleExtensions = ['.srt', '.smi', '.ssa', '.ass', '.vtt'];
+function isSubtitleFile(file) {
+    return supportedSubtitleExtensions.indexOf(path.extname().toLowerCase()) > -1;
 }
 
 function copyTvSingle(argv) {
@@ -102,6 +156,21 @@ function parseTvName(name) {
         Season: pad(parseInt(parts[2]), 2),
         Episode: pad(parseInt(parts[3]), 2)
     };
+}
+
+function parseMovieName(name) {
+    var parts = name.match(/^(.*)\b(\d{4})\b/i);
+    if(parts) {
+        logPair('Parsed', parts);
+        var info = {
+            Name: parts[1].replace(/(\.|\s)+/g, ' ').trim(),
+            Year: parts[2]
+        };
+        return `${info.Name} (${info.Year})`;
+    }
+    errorPair('Failed to parse movie name', name);
+    var baseName = path.basename(name, path.extname(name));
+    return baseName.replace(/(\.|\s)+/g, ' ');
 }
 
 function pad(n, width, padding) {
