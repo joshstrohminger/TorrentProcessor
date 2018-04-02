@@ -137,7 +137,7 @@ function copyTvSingle(argv) {
         var info = parseTvName(argv.Name);
         var sourcePath = argv.ContentPath;
         if (!fs.existsSync(sourcePath)) throw "Source doesn't exist: '" + sourcePath + "'";
-        var destinationDirectory = path.normalize(path.join(argv.OutputPath, 'TV'));
+        var destinationDirectory = path.normalize(path.join(argv.OutputPath, 'TV', info.Name));
 
         // check if show folder exists and create it if necessary
         if(fs.exists(destinationDirectory)) {
