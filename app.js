@@ -5,6 +5,8 @@ const path = require('path');
 const chalk = require('chalk');
 const prettyBytes = require('pretty-bytes');
 const winston = require('winston');
+const properCase = require('proper-case');
+const trueCasePath = require('true-case-path')
 
 const env = process.env.NODE_ENV || 'development';
 const logDir = path.join(__dirname, 'log');
@@ -135,8 +137,18 @@ function copyTvSingle(argv) {
         var info = parseTvName(argv.Name);
         var sourcePath = argv.ContentPath;
         if (!fs.existsSync(sourcePath)) throw "Source doesn't exist: '" + sourcePath + "'";
-        var destinationName = info.Name + ' S' + info.Season + 'E' + info.Episode + path.extname(sourcePath);
-        var destinationPath = path.normalize(path.join(argv.OutputPath, 'TV', destinationName));
+        var destinationDirectory = path.normalize(path.join(argv.OutputPath, 'TV'));
+
+        // check if show folder exists and create it if necessary
+        if(fs.exists(destinationDirectory)) {
+            // ensure we get the correct case as it already exists in the file system
+            info.Name = path.basename(trueCasePath(destinationDirectory));
+        } else {
+            // create the directory
+            fs.mkdirSync(destinationDirectory);
+        }
+        var destinationFile = info.Name + ' S' + info.Season + 'E' + info.Episode + path.extname(sourcePath);
+        var destinationPath = path.normalize(path.join(destinationDirectory, destinationFile));
         if (fs.existsSync(destinationPath)) throw "Destination already exists: '" + destinationPath + "'";
         logPair('Copying', prettyBytes(argv.Bytes) + 'bytes from "' + sourcePath + '" to "' + destinationPath + '"');
         if(!argv.practice) {
@@ -152,7 +164,7 @@ function parseTvName(name) {
     if (!parts) throw 'Failed to parse TV name';
     logPair('Parsed', parts);
     return {
-        Name: parts[1].replace(/(\.|\s)+/g, ' ').trim(),
+        Name: properCase(parts[1].replace(/(\.|\s)+/g, ' ').trim()),
         Season: pad(parseInt(parts[2]), 2),
         Episode: pad(parseInt(parts[3]), 2)
     };
@@ -163,7 +175,7 @@ function parseMovieName(name) {
     if(parts) {
         logPair('Parsed', parts);
         var info = {
-            Name: parts[1].replace(/(\.|\s)+/g, ' ').trim(),
+            Name: properCase(parts[1].replace(/(\.|\s)+/g, ' ').trim()),
             Year: parts[2]
         };
         return `${info.Name} (${info.Year})`;
@@ -185,4 +197,9 @@ function logPair(label, value) {
 
 function errorPair(label, value) {
     log.error(label + ': ' + chalk.gray(value));
+}
+
+function toTitleCase(str)
+{
+    return str.replace(/\w\S*/g, function(txt){return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();});
 }
