@@ -75,11 +75,11 @@ function copyMoviesSingle(argv) {
     if (argv.NumberOfFiles === 1) {
         var name = parseMovieName(argv.Name);
         var sourcePath = argv.ContentPath;
-        if (!fs.existsSync(sourcePath)) throw "Source doesn't exist: '" + sourcePath + "'";
+        if (!fs.existsSync(sourcePath)) throw `Source doesn't exist: "${sourcePath}"`;
         var destinationName = name + path.extname(sourcePath);
         var destinationPath = path.normalize(path.join(argv.OutputPath, 'Movies', destinationName));
-        if (fs.existsSync(destinationPath)) throw "Destination already exists: '" + destinationPath + "'";
-        logPair('Copying', prettyBytes(argv.Bytes) + 'bytes from "' + sourcePath + '" to "' + destinationPath + '"');
+        if (fs.existsSync(destinationPath)) throw `Destination already exists: "${destinationPath}"`;
+        logPair('Copying', `${prettyBytes(argv.Bytes)} bytes from "${sourcePath}" to "${destinationPath}"`);
         if(!argv.practice) {
             fs.copyFileSync(sourcePath, destinationPath, fs.constants.COPYFILE_EXCL);
         }
@@ -91,14 +91,14 @@ function copyMoviesSingle(argv) {
             Subtitles: file => isSubtitleFile(file)
         });
         var videoDestination = path.normalize(path.join(argv.OutputPath, 'Movies', name + path.extname(files.Video)));
-        var subtitlesDestination = path.normalize(path.join(argv.OutputPath, 'Movies', name + '.en' + path.extname(files.Subtitles)));
-        if (fs.existsSync(videoDestination)) throw "Video destination already exists: '" + videoDestination + "'";
-        if (fs.existsSync(subtitlesDestination)) throw "Subtitles destination already exists: '" + subtitlesDestination + "'";
-        logPair('Copying', prettyBytes(argv.Bytes) + 'bytes from "' + files.Video + '" to "' + videoDestination + '"');
+        var subtitlesDestination = path.normalize(path.join(argv.OutputPath, 'Movies', `${name}.en${path.extname(files.Subtitles)}`));
+        if (fs.existsSync(videoDestination)) throw `Video destination already exists: "${videoDestination}"`;
+        if (fs.existsSync(subtitlesDestination)) throw `Subtitles destination already exists: "${subtitlesDestination}"`;
+        logPair('Copying', `${prettyBytes(argv.Bytes)} bytes from "${files.Video}" to "${videoDestination}"`);
         if(!argv.practice) {
             fs.copyFileSync(files.Video, videoDestination, fs.constants.COPYFILE_EXCL);
         }
-        logPair('Copying', prettyBytes(argv.Bytes) + 'bytes from "' + files.Subtitles + '" to "' + subtitlesDestination + '"');
+        logPair('Copying', `${prettyBytes(argv.Bytes)} bytes from "${files.Subtitles}" to "${subtitlesDestination}"`);
         if(!argv.practice) {
             fs.copyFileSync(files.Subtitles, subtitlesDestination, fs.constants.COPYFILE_EXCL);
         }
