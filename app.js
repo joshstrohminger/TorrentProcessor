@@ -88,7 +88,7 @@ function copyMoviesSingle(argv) {
         var destinationName = name + path.extname(sourcePath);
         var destinationPath = path.normalize(path.join(argv.OutputPath, 'Movies', destinationName));
         if (fs.existsSync(destinationPath)) throw `Destination already exists: "${destinationPath}"`;
-        logPair('Copying', `${prettyBytes(argv.Bytes)} bytes from "${sourcePath}" to "${destinationPath}"`);
+        logPair('Copying', `${prettyBytes(argv.Bytes)} from "${sourcePath}" to "${destinationPath}"`);
         if(!argv.practice) {
             fs.copyFileSync(sourcePath, destinationPath, fs.constants.COPYFILE_EXCL);
         }
@@ -103,11 +103,11 @@ function copyMoviesSingle(argv) {
         var subtitlesDestination = path.normalize(path.join(argv.OutputPath, 'Movies', `${name}.en${path.extname(files.Subtitles)}`));
         if (fs.existsSync(videoDestination)) throw `Video destination already exists: "${videoDestination}"`;
         if (fs.existsSync(subtitlesDestination)) throw `Subtitles destination already exists: "${subtitlesDestination}"`;
-        logPair('Copying', `${prettyBytes(argv.Bytes)} bytes from "${files.Video}" to "${videoDestination}"`);
+        logPair('Copying', `${prettyBytes(argv.Bytes)} from "${files.Video}" to "${videoDestination}"`);
         if(!argv.practice) {
             fs.copyFileSync(files.Video, videoDestination, fs.constants.COPYFILE_EXCL);
         }
-        logPair('Copying', `${prettyBytes(argv.Bytes)} bytes from "${files.Subtitles}" to "${subtitlesDestination}"`);
+        logPair('Copying', `${prettyBytes(argv.Bytes)} from "${files.Subtitles}" to "${subtitlesDestination}"`);
         if(!argv.practice) {
             fs.copyFileSync(files.Subtitles, subtitlesDestination, fs.constants.COPYFILE_EXCL);
         }
@@ -157,7 +157,7 @@ function copyTvSingle(argv) {
         var destinationFile = info.Name + ' S' + info.Season + 'E' + info.Episode + path.extname(sourcePath);
         var destinationPath = path.normalize(path.join(destinationDirectory, destinationFile));
         if (fs.existsSync(destinationPath)) throw "Destination already exists: '" + destinationPath + "'";
-        logPair('Copying', prettyBytes(argv.Bytes) + 'bytes from "' + sourcePath + '" to "' + destinationPath + '"');
+        logPair('Copying', `${prettyBytes(argv.Bytes)} from "${sourcePath}" to "${destinationPath}"`);
         if(!argv.practice) {
             fs.copyFileSync(sourcePath, destinationPath, fs.constants.COPYFILE_EXCL);
         }
