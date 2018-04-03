@@ -147,7 +147,7 @@ function copyTvSingle(argv) {
         var destinationDirectory = path.normalize(path.join(argv.OutputPath, 'TV', info.Name));
 
         // check if show folder exists and create it if necessary
-        if(fs.exists(destinationDirectory)) {
+        if(fs.existsSync(destinationDirectory)) {
             // ensure we get the correct case as it already exists in the file system
             info.Name = path.basename(trueCasePath(destinationDirectory));
         } else {
