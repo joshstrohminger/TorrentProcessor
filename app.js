@@ -32,7 +32,7 @@ const log = new (winston.Logger)({
     ]
 });
 
-const argv = require('yargs')
+const parser = require('yargs')
     .command('copy', 'Copy completed files', yargs => {
         return yargs
             .option('n', { demandOption: true, requiresArg: true, type: 'string', alias: ['N', 'Name'], description: 'Torrent name' })
@@ -46,12 +46,19 @@ const argv = require('yargs')
             .option('i', { demandOption: true, requiresArg: true, type: 'string', alias: ['I', 'Hash'], description: 'Info hash' })
             .option('o', { demandOption: true, requiresArg: true, type: 'string', alias: ['O', 'OutputPath'], description: 'Output root directory' });
     }, copyCommandHandler)
-    .demandCommand()
+    .demandCommand(1, "Must provide a valid command")
+    .strict()
     .option('practice', {requiresArg: false, type: 'boolean', alias: ['p','P'], description: "Don't actually do anything, just print/log like it to see if it works"})
     .help('h')
     .alias('h', 'H')
-    .alias('h', 'help')
-    .argv;
+    .alias('h', 'help');
+    
+parser.parse(process.argv.slice(2), (err, argv, output) => {
+    log.info(output);
+    if(err) {
+        processingErrorHandler(err);
+    }
+});
 
 function copyCommandHandler(argv) {
     try {
