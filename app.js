@@ -2,7 +2,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const chalk = require('chalk');
 const prettyBytes = require('pretty-bytes');
 const winston = require('winston');
 const properCase = require('proper-case');
@@ -36,7 +35,7 @@ const parser = require('yargs')
     .command('copy', 'Copy completed files', yargs => {
         return yargs
             .option('n', { demandOption: true, requiresArg: true, type: 'string', alias: ['N', 'Name'], description: 'Torrent name' })
-            .option('l', { demandOption: true, requiresArg: true, type: 'string', alias: ['L', 'Category'], description: 'Category', choices: ['Moviesingle', 'TvSingle'] })
+            .option('l', { demandOption: true, requiresArg: true, type: 'string', alias: ['L', 'Category'], description: 'Category', choices: ['MovieSingle', 'TvSingle'] })
             .option('f', { demandOption: true, requiresArg: true, type: 'string', alias: ['F', 'ContentPath'], description: 'Content path (same as root path for multifile torrent)' })
             .option('r', { demandOption: true, requiresArg: true, type: 'string', alias: ['R', 'RootPath'], description: 'Root path (first torrent subdirectory path)' })
             .option('d', { demandOption: true, requiresArg: true, type: 'string', alias: ['D', 'SavePath'], description: 'Save path' })
@@ -199,11 +198,11 @@ function pad(n, width, padding) {
 }
 
 function logPair(label, value) {
-    log.info(label + ': ' + chalk.gray(value));
+    log.info(label + ': ' + value);
 }
 
 function errorPair(label, value) {
-    log.error(label + ': ' + chalk.gray(value));
+    log.error(label + ': ' + value);
 }
 
 function toTitleCase(str)

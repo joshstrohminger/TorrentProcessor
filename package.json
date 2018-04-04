@@ -17,7 +17,6 @@
   },
   "homepage": "https://github.com/joshstrohminger/TorrentProcessor#readme",
   "dependencies": {
-    "chalk": "^2.3.2",
     "pretty-bytes": "^4.0.2",
     "proper-case": "^1.0.5",
     "true-case-path": "^1.0.2",
