@@ -81,7 +81,7 @@ function copyMoviesSingle(argv) {
         throw 'NumberOfFiles must be greater than zero';
     }
     if (argv.NumberOfFiles === 1) {
-        var name = parseMovieName(argv.Name);
+        var name = argv.Name; // don't parse movie names, just use the provided name
         var sourcePath = argv.ContentPath;
         if (!fs.existsSync(sourcePath)) throw `Source doesn't exist: "${sourcePath}"`;
         var destinationName = name + path.extname(sourcePath);
@@ -93,7 +93,7 @@ function copyMoviesSingle(argv) {
         }
     } else if (argv.NumberOfFiles === 2) {
         // assume the second file is english subtitles
-        var name = parseMovieName(argv.Name);
+        var name = argv.Name; // don't parse movie names, just use the provided name
         var files = getFiles(argv.ContentPath, {
             Video: file => !isSubtitleFile(file),
             Subtitles: file => isSubtitleFile(file)
