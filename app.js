@@ -91,27 +91,30 @@ function copyMoviesSingle(argv) {
         if(!argv.practice) {
             fs.copyFileSync(sourcePath, destinationPath, fs.constants.COPYFILE_EXCL);
         }
-    } else if (argv.NumberOfFiles === 2) {
+    } else {
         // assume the second file is english subtitles
         var name = argv.Name; // don't parse movie names, just use the provided name
         var files = getFiles(argv.ContentPath, {
             Video: file => !isSubtitleFile(file),
             Subtitles: file => isSubtitleFile(file)
         });
+        if(!files.Video) {
+            throw 'Failed to find video file';
+        }
         var videoDestination = path.normalize(path.join(argv.OutputPath, 'Movies', name + path.extname(files.Video)));
-        var subtitlesDestination = path.normalize(path.join(argv.OutputPath, 'Movies', `${name}.en${path.extname(files.Subtitles)}`));
         if (fs.existsSync(videoDestination)) throw `Video destination already exists: "${videoDestination}"`;
-        if (fs.existsSync(subtitlesDestination)) throw `Subtitles destination already exists: "${subtitlesDestination}"`;
         logPair('Copying', `${prettyBytes(argv.Bytes)} from "${files.Video}" to "${videoDestination}"`);
         if(!argv.practice) {
             fs.copyFileSync(files.Video, videoDestination, fs.constants.COPYFILE_EXCL);
         }
-        logPair('Copying', `${prettyBytes(argv.Bytes)} from "${files.Subtitles}" to "${subtitlesDestination}"`);
-        if(!argv.practice) {
-            fs.copyFileSync(files.Subtitles, subtitlesDestination, fs.constants.COPYFILE_EXCL);
+        if(files.Subtitles) {
+            var subtitlesDestination = path.normalize(path.join(argv.OutputPath, 'Movies', `${name}.en${path.extname(files.Subtitles)}`));
+            if (fs.existsSync(subtitlesDestination)) throw `Subtitles destination already exists: "${subtitlesDestination}"`;
+            logPair('Copying', `${prettyBytes(argv.Bytes)} from "${files.Subtitles}" to "${subtitlesDestination}"`);
+            if(!argv.practice) {
+                fs.copyFileSync(files.Subtitles, subtitlesDestination, fs.constants.COPYFILE_EXCL);
+            }
         }
-    } else {
-        throw `Handling ${argv.NumberOfFiles} movie files is not yet supported`;
     }
 }
 
