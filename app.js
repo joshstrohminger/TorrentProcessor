@@ -31,6 +31,8 @@ const log = new (winston.Logger)({
     ]
 });
 
+const supportedSubtitleExtensions = ['.srt', '.smi', '.ssa', '.ass', '.vtt'];
+
 const parser = require('yargs')
     .command('copy', 'Copy completed files', yargs => {
         return yargs
@@ -72,8 +74,8 @@ function copyCommandHandler(argv) {
 }
 
 function processingErrorHandler(message) {
+    log.info(process.argv.join(' '));
     log.error(message);
-    log.error(process.argv.map(arg => '"' + arg + '"').join(' '));
 }
 
 function copyMoviesSingle(argv) {
@@ -136,7 +138,6 @@ function getFiles(directory, criteria) {
     return foundFiles;
 }
 
-const supportedSubtitleExtensions = ['.srt', '.smi', '.ssa', '.ass', '.vtt'];
 function isSubtitleFile(file) {
     return supportedSubtitleExtensions.indexOf(path.extname().toLowerCase()) > -1;
 }
