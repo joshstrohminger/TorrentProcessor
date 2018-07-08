@@ -206,7 +206,7 @@ function copyTvSingle(argv) {
 
 function parseSeasonName(name) {
     var parts = name.match(/^(.*?)S(\d+)/i);
-    if (!parts) throw 'Failed to parse season name';
+    if (!parts) throw `Failed to parse season name '${name}'`;
     logPair('Parsed', parts);
     return {
         Name: properCase(parts[1].replace(/(\.|\s)+/g, ' ').trim()),
@@ -216,7 +216,7 @@ function parseSeasonName(name) {
 
 function parseTvName(name) {
     var parts = name.match(/^(.*?)S(\d+)\.?E(\d+)/i);
-    if (!parts) throw 'Failed to parse TV name';
+    if (!parts) throw `Failed to parse TV name '${name}'`;
     logPair('Parsed', parts);
     return {
         Name: properCase(parts[1].replace(/(\.|\s)+/g, ' ').trim()),
