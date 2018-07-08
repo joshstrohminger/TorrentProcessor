@@ -152,8 +152,10 @@ function createTvDestinationDirectory(info, sourcePath, outputPath) {
         // ensure we get the correct case as it already exists in the file system
         info.Name = path.basename(trueCasePath(destinationDirectory));
     } else {
-        // create the directory
-        fs.mkdirSync(destinationDirectory);
+        log.info(`Creating directory '${destinationDirectory}'`);
+        if(!argv.practice) {
+            fs.mkdirSync(destinationDirectory);
+        }
     }
 
     return destinationDirectory;
@@ -161,7 +163,7 @@ function createTvDestinationDirectory(info, sourcePath, outputPath) {
 
 function copyTvSeason(argv) {
     if(argv.NumberOfFiles < 2) {
-        log.info('Not multiple files at: ' + argv.ContentPath);
+        log.error('Not multiple files at: ' + argv.ContentPath);
     } else {
         var info = parseSeasonName(argv.Name);
         var sourcePath = argv.ContentPath;
@@ -200,7 +202,7 @@ function copyTvSingle(argv) {
             fs.copyFileSync(sourcePath, destinationPath, fs.constants.COPYFILE_EXCL);
         }
     } else if (argv.NumberOfFiles > 1) {
-        log.info('Multiple files at: ' + argv.ContentPath);
+        log.error('Multiple files at: ' + argv.ContentPath);
     }
 }
 
