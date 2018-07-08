@@ -37,7 +37,7 @@ const parser = require('yargs')
     .command('copy', 'Copy completed files', yargs => {
         return yargs
             .option('n', { demandOption: true, requiresArg: true, type: 'string', alias: ['N', 'Name'], description: 'Torrent name' })
-            .option('l', { demandOption: true, requiresArg: true, type: 'string', alias: ['L', 'Category'], description: 'Category', choices: ['MovieSingle', 'TvSingle'] })
+            .option('l', { demandOption: true, requiresArg: true, type: 'string', alias: ['L', 'Category'], description: 'Category', choices: ['MovieSingle', 'TvSingle', 'TvSeason'] })
             .option('f', { demandOption: true, requiresArg: true, type: 'string', alias: ['F', 'ContentPath'], description: 'Content path (same as root path for multifile torrent)' })
             .option('r', { demandOption: true, requiresArg: true, type: 'string', alias: ['R', 'RootPath'], description: 'Root path (first torrent subdirectory path)' })
             .option('d', { demandOption: true, requiresArg: true, type: 'string', alias: ['D', 'SavePath'], description: 'Save path' })
@@ -66,6 +66,7 @@ function copyCommandHandler(argv) {
         switch (argv.Category) {
             case 'MovieSingle': return copyMoviesSingle(argv);
             case 'TvSingle': return copyTvSingle(argv);
+            case 'TvSeason': return copyTvSeason(argv);
             default: throw 'Unhandled category';
         }
     } catch (e) {
@@ -142,21 +143,55 @@ function isSubtitleFile(file) {
     return supportedSubtitleExtensions.indexOf(path.extname().toLowerCase()) > -1;
 }
 
+function createTvDestinationDirectory(info, sourcePath, outputPath) {
+    if (!fs.existsSync(sourcePath)) throw "Source doesn't exist: '" + sourcePath + "'";
+    var destinationDirectory = path.normalize(path.join(outputPath, 'TV', info.Name));
+
+    // check if show folder exists and create it if necessary
+    if(fs.existsSync(destinationDirectory)) {
+        // ensure we get the correct case as it already exists in the file system
+        info.Name = path.basename(trueCasePath(destinationDirectory));
+    } else {
+        // create the directory
+        fs.mkdirSync(destinationDirectory);
+    }
+
+    return destinationDirectory;
+}
+
+function copyTvSeason(argv) {
+    if(argv.NumberOfFiles < 2) {
+        log.info('Not multiple files at: ' + argv.ContentPath);
+    } else {
+        var info = parseSeasonName(argv.Name);
+        var sourcePath = argv.ContentPath;
+        var destinationDirectory = createTvDestinationDirectory(info, sourcePath, argv.OutputPath);
+        
+        fs.readdirSync(sourcePath).filter(file => path.extname(file) == '.mkv').forEach(file => {
+            try {
+                var fileInfo = parseTvName(file);
+                var fileSourcePath = path.normalize(path.join(sourcePath, file));
+                
+                // Use season name in case the episode name is different
+                var destinationFile = info.Name + ' S' + fileInfo.Season + 'E' + fileInfo.Episode + path.extname(fileSourcePath);
+                var destinationPath = path.normalize(path.join(destinationDirectory, destinationFile));
+                if (fs.existsSync(destinationPath)) throw "Destination already exists: '" + destinationPath + "'";
+                logPair('Copying', `"${fileSourcePath}" to "${destinationPath}"`);
+                if(!argv.practice) {
+                    fs.copyFileSync(fileSourcePath, destinationPath, fs.constants.COPYFILE_EXCL);
+                }
+            } catch (e) {
+                log.error(`Failed to parse '${file}'`, e);
+            }
+        });
+    }
+}
+
 function copyTvSingle(argv) {
     if (argv.NumberOfFiles === 1) {
         var info = parseTvName(argv.Name);
         var sourcePath = argv.ContentPath;
-        if (!fs.existsSync(sourcePath)) throw "Source doesn't exist: '" + sourcePath + "'";
-        var destinationDirectory = path.normalize(path.join(argv.OutputPath, 'TV', info.Name));
-
-        // check if show folder exists and create it if necessary
-        if(fs.existsSync(destinationDirectory)) {
-            // ensure we get the correct case as it already exists in the file system
-            info.Name = path.basename(trueCasePath(destinationDirectory));
-        } else {
-            // create the directory
-            fs.mkdirSync(destinationDirectory);
-        }
+        var destinationDirectory = createTvDestinationDirectory(info, sourcePath, argv.OutputPath);   
         var destinationFile = info.Name + ' S' + info.Season + 'E' + info.Episode + path.extname(sourcePath);
         var destinationPath = path.normalize(path.join(destinationDirectory, destinationFile));
         if (fs.existsSync(destinationPath)) throw "Destination already exists: '" + destinationPath + "'";
@@ -167,6 +202,16 @@ function copyTvSingle(argv) {
     } else if (argv.NumberOfFiles > 1) {
         log.info('Multiple files at: ' + argv.ContentPath);
     }
+}
+
+function parseSeasonName(name) {
+    var parts = name.match(/^(.*?)S(\d+)/i);
+    if (!parts) throw 'Failed to parse season name';
+    logPair('Parsed', parts);
+    return {
+        Name: properCase(parts[1].replace(/(\.|\s)+/g, ' ').trim()),
+        Season: pad(parseInt(parts[2]), 2)
+    };
 }
 
 function parseTvName(name) {
