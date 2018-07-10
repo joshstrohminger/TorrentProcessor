@@ -87,7 +87,8 @@ function copyMoviesSingle(argv) {
         var name = argv.Name; // don't parse movie names, just use the provided name
         var sourcePath = argv.ContentPath;
         if (!fs.existsSync(sourcePath)) throw `Source doesn't exist: "${sourcePath}"`;
-        var destinationName = name + path.extname(sourcePath);
+        var extension = path.extname(sourcePath);
+        var destinationName = name + (name.endsWith(extension) ? "" : extension);
         var destinationPath = path.normalize(path.join(argv.OutputPath, 'Movies', destinationName));
         if (fs.existsSync(destinationPath)) throw `Destination already exists: "${destinationPath}"`;
         logPair('Copying', `${prettyBytes(argv.Bytes)} from "${sourcePath}" to "${destinationPath}"`);
