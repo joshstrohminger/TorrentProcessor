@@ -144,7 +144,7 @@ function isSubtitleFile(file) {
     return supportedSubtitleExtensions.indexOf(path.extname().toLowerCase()) > -1;
 }
 
-function createTvDestinationDirectory(info, sourcePath, outputPath) {
+function createTvDestinationDirectory(argv, info, sourcePath, outputPath) {
     if (!fs.existsSync(sourcePath)) throw "Source doesn't exist: '" + sourcePath + "'";
     var destinationDirectory = path.normalize(path.join(outputPath, 'TV', info.Name));
 
@@ -168,7 +168,7 @@ function copyTvSeason(argv) {
     } else {
         var info = parseSeasonName(argv.Name);
         var sourcePath = argv.ContentPath;
-        var destinationDirectory = createTvDestinationDirectory(info, sourcePath, argv.OutputPath);
+        var destinationDirectory = createTvDestinationDirectory(argv, info, sourcePath, argv.OutputPath);
         
         fs.readdirSync(sourcePath).filter(file => path.extname(file) == '.mkv').forEach(file => {
             try {
@@ -194,7 +194,7 @@ function copyTvSingle(argv) {
     if (argv.NumberOfFiles === 1) {
         var info = parseTvName(argv.Name);
         var sourcePath = argv.ContentPath;
-        var destinationDirectory = createTvDestinationDirectory(info, sourcePath, argv.OutputPath);   
+        var destinationDirectory = createTvDestinationDirectory(argv, info, sourcePath, argv.OutputPath);   
         var destinationFile = info.Name + ' S' + info.Season + 'E' + info.Episode + path.extname(sourcePath);
         var destinationPath = path.normalize(path.join(destinationDirectory, destinationFile));
         if (fs.existsSync(destinationPath)) throw "Destination already exists: '" + destinationPath + "'";
