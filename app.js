@@ -141,7 +141,7 @@ function getFiles(directory, criteria) {
 }
 
 function isSubtitleFile(file) {
-    return supportedSubtitleExtensions.indexOf(path.extname().toLowerCase()) > -1;
+    return supportedSubtitleExtensions.indexOf(path.extname(file).toLowerCase()) > -1;
 }
 
 function createTvDestinationDirectory(argv, info, sourcePath, outputPath) {
