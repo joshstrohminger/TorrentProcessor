@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/joshstrohminger/TorrentProcessor/internal/config"
 	"github.com/joshstrohminger/TorrentProcessor/internal/torrent"
 	"github.com/joshstrohminger/TorrentProcessor/internal/work"
 	"github.com/spf13/cobra"
@@ -18,18 +19,26 @@ var processCmd = &cobra.Command{
 	Short: "Process queued torrents",
 	Long:  "Process completed torrents from the work.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if workPath, err := getWorkPath(cmd); err != nil {
+		if appCfg, err := getAppConfig(cmd); err != nil {
 			return err
 		} else if maxRetries, err := cmd.Flags().GetInt("retries"); err != nil {
 			return err
 		} else if limit, err := cmd.Flags().GetInt("limit"); err != nil {
 			return err
-		} else if work, err := work.New(workPath); err != nil {
+		} else if dryRun, err := cmd.Flags().GetBool("dry-run"); err != nil {
+			return err
+		} else if work, err := work.New(appCfg.WorkPath); err != nil {
 			return fmt.Errorf("failed to create work list: %w", err)
 		} else {
+			cfg := config.Process{
+				App:        appCfg,
+				DryRun:     dryRun,
+				Limit:      limit,
+				MaxRetries: maxRetries,
+			}
 			ctx, cancel := signal.NotifyContext(cmd.Context(), os.Interrupt)
 			defer cancel()
-			if err := processWork(ctx, work, maxRetries, limit); err != nil {
+			if err := processWork(ctx, work, cfg); err != nil {
 				return fmt.Errorf("failed to process work: %w", err)
 			}
 		}
@@ -40,10 +49,11 @@ var processCmd = &cobra.Command{
 func init() {
 	processCmd.Flags().Int("retries", 3, "Maximum number of retries when trying to read the next entry.")
 	processCmd.Flags().Int("limit", -1, "Limit the number of entries processed before exiting.")
+	processCmd.Flags().Bool("dry-run", false, "Don't move files or entries, just log what would be done.")
 	rootCmd.AddCommand(processCmd)
 }
 
-func processWork(ctx context.Context, w *work.Work, maxRetries int, limit int) error {
+func processWork(ctx context.Context, w *work.Work, cfg config.Process) error {
 	delays := []time.Duration{
 		time.Second,
 		2 * time.Second,
@@ -53,11 +63,19 @@ func processWork(ctx context.Context, w *work.Work, maxRetries int, limit int) e
 	}
 	retries := 0
 
+	doneHandler := w.Remove
+	if cfg.DryRun {
+		doneHandler = func(entry torrent.Entry) error {
+			w.Ignore(entry)
+			return nil
+		}
+	}
+
 	for {
 		if entry, err := w.Next(); err != nil {
 			var errParse work.ErrParse
 			if errors.As(err, &errParse) {
-				if maxRetries < 0 || retries < maxRetries {
+				if cfg.MaxRetries < 0 || retries < cfg.MaxRetries {
 					var delay time.Duration
 					if retries > len(delays)-1 {
 						delay = delays[len(delays)-1]
@@ -65,7 +83,7 @@ func processWork(ctx context.Context, w *work.Work, maxRetries int, limit int) e
 						delay = delays[retries]
 					}
 					retries++
-					logger.LogAttrs(ctx, slog.LevelWarn, "Failed to get next work entry", slog.Any("error", err), slog.Int("attempt", retries), slog.Int("max", maxRetries), slog.Duration("delay", delay))
+					logger.LogAttrs(ctx, slog.LevelWarn, "Failed to get next work entry", slog.Any("error", err), slog.Int("attempt", retries), slog.Int("max", cfg.MaxRetries), slog.Duration("delay", delay))
 
 					select {
 					case <-time.After(delay):
@@ -74,7 +92,7 @@ func processWork(ctx context.Context, w *work.Work, maxRetries int, limit int) e
 						return nil
 					}
 				}
-				err = fmt.Errorf("exceeded %d retries: %w", maxRetries, err)
+				err = fmt.Errorf("exceeded %d retries: %w", cfg.MaxRetries, err)
 			}
 			return fmt.Errorf("failed to get next work entry: %w", err)
 		} else if entry == nil {
@@ -84,24 +102,20 @@ func processWork(ctx context.Context, w *work.Work, maxRetries int, limit int) e
 			case <-ctx.Done():
 				return nil
 			}
-		} else if err = processEntry(ctx, *entry); err != nil {
-			return fmt.Errorf("failed to process entry %#v: %w", entry, err)
-		} else if err = w.Remove(*entry); err != nil {
+		} else if err = torrent.NewProcessor(cfg, logger).Process(ctx, *entry); err != nil {
+			w.Ignore(*entry)
+			return fmt.Errorf("failed to process entry %#v, ignoring until restart: %w", entry, err)
+		} else if err = doneHandler(*entry); err != nil {
 			return fmt.Errorf("failed to remove entry %#v: %w", entry, err)
 		} else {
 			logger.LogAttrs(ctx, slog.LevelInfo, "Success", slog.Any("entry", entry))
-			if limit > 0 {
-				limit--
-				if limit == 0 {
+			if cfg.Limit > 0 {
+				cfg.Limit--
+				if cfg.Limit == 0 {
 					logger.LogAttrs(ctx, slog.LevelDebug, "Limit reached")
 					return nil
 				}
 			}
 		}
 	}
-}
-
-func processEntry(ctx context.Context, entry torrent.Entry) error {
-	logger.LogAttrs(ctx, slog.LevelInfo, "Processing", slog.Any("entry", entry))
-	return torrent.Process(ctx, entry)
 }

@@ -1,7 +1,10 @@
 package cmd
 
 import (
+	"fmt"
+	"github.com/joshstrohminger/TorrentProcessor/internal/config"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"log/slog"
 	"os"
 )
@@ -17,11 +20,27 @@ func Execute() {
 	}
 }
 
-func getWorkPath(cmd *cobra.Command) (string, error) {
-	return cmd.Flags().GetString("work")
+func getAppConfig(cmd *cobra.Command) (cfg config.App, err error) {
+	configPath, err := cmd.Flags().GetString("config")
+	if err != nil {
+		return
+	}
+
+	viper.SetConfigFile(configPath)
+	if err = viper.ReadInConfig(); err != nil {
+		err = fmt.Errorf("failed to read config file %s: %w", configPath, err)
+		return
+	}
+
+	if err = viper.Unmarshal(&cfg); err != nil {
+		err = fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+
+	err = cfg.Validate()
+	return
 }
 
 func init() {
 	cobra.EnableCaseInsensitive = true
-	rootCmd.PersistentFlags().StringP("work", "w", "work.json", "Path to the JSON work directory to use.")
+	rootCmd.PersistentFlags().String("config", "", "Path to the config file to use.")
 }

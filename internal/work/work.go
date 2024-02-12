@@ -11,7 +11,8 @@ import (
 )
 
 type Work struct {
-	dir string
+	dir       string
+	processed map[string]struct{}
 }
 
 func New(path string) (*Work, error) {
@@ -20,7 +21,7 @@ func New(path string) (*Work, error) {
 	} else if !info.IsDir() {
 		return nil, fmt.Errorf("path is not a directory: '%s'", path)
 	} else {
-		return &Work{dir: path}, nil
+		return &Work{dir: path, processed: make(map[string]struct{})}, nil
 	}
 }
 
@@ -48,7 +49,7 @@ func (w *Work) Next() (*torrent.Entry, error) {
 		if !entry.IsDir() && path.Ext(entry.Name()) == ".json" {
 			if info, err := entry.Info(); err != nil {
 				return nil, fmt.Errorf("failed to get entry info: %w", err)
-			} else if file == nil || info.ModTime().Before(file.ModTime()) {
+			} else if _, exists := w.processed[file.Name()]; !exists && (file == nil || info.ModTime().Before(file.ModTime())) {
 				file = info
 			}
 		}
@@ -67,6 +68,11 @@ func (w *Work) Next() (*torrent.Entry, error) {
 		return nil, fmt.Errorf("file '%s' should actually be named '%s' based on the contents", filepath, expectedPath)
 	}
 	return entry, nil
+}
+
+func (w *Work) Ignore(entry torrent.Entry) {
+	filepath := w.getFilepath(entry)
+	w.processed[path.Base(filepath)] = struct{}{}
 }
 
 func (w *Work) Remove(entry torrent.Entry) error {

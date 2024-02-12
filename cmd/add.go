@@ -14,8 +14,10 @@ var addCmd = &cobra.Command{
 	Short: "Add a torrent to be processed",
 	Long:  "Add a completed torrent to the work to be processed.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if workPath, err := getWorkPath(cmd); err != nil {
+		if cfg, err := getAppConfig(cmd); err != nil {
 			return err
+		} else if work, err := work.New(cfg.WorkPath); err != nil {
+			return fmt.Errorf("failed to create work list: %w", err)
 		} else if name, err := cmd.Flags().GetString("name"); err != nil {
 			return err
 		} else if category, err := getEnumFlag(cmd, "category", torrent.AllCategories); err != nil {
@@ -34,8 +36,6 @@ var addCmd = &cobra.Command{
 			return err
 		} else if outputPath, err := cmd.Flags().GetString("output-path"); err != nil {
 			return err
-		} else if work, err := work.New(workPath); err != nil {
-			return fmt.Errorf("failed to create work list: %w", err)
 		} else {
 			entry := torrent.Entry{
 				OutputPath:    outputPath,
