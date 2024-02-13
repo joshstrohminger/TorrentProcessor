@@ -11,7 +11,10 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
+	"strconv"
+	"strings"
 )
 
 var subtitleExts = []string{".srt", ".smi", ".ssa", ".ass", ".vtt"}
@@ -28,22 +31,29 @@ func NewProcessor(cfg config.Process, logger *slog.Logger) *Processor {
 func (p *Processor) Process(ctx context.Context, entry Entry) error {
 	p.logger.LogAttrs(ctx, slog.LevelInfo, "Processing", slog.Any("config", p.cfg), slog.Any("entry", entry))
 
+	if entry.NumberOfFiles <= 0 {
+		return errors.New("no files")
+	}
+
+	if _, err := os.Stat(entry.ContentPath); err != nil {
+		return fmt.Errorf("content path doesn't exist: %s", entry.ContentPath)
+	}
+
 	switch entry.Category {
 	case MovieSingle:
 		return p.copyMovieSingle(ctx, entry)
 	case TvSingle:
+		return p.copyTvSingle(ctx, entry)
 	case TvSeason:
+		return p.copyTvSeason(ctx, entry)
 	case Ignore:
+		return nil
 	default:
 		return fmt.Errorf("unhandled category %s", entry.Category)
 	}
 }
 
 func (p *Processor) copyMovieSingle(ctx context.Context, entry Entry) error {
-	if entry.NumberOfFiles <= 0 {
-		return errors.New("no files")
-	}
-
 	subtitles := &FileFilter{
 		Filter: func(s string) bool {
 			return slices.Contains(subtitleExts, path.Ext(s))
@@ -139,4 +149,138 @@ func filterFiles(dir string, filters ...*FileFilter) error {
 		return fmt.Errorf("failed to walk dir %s: %w", dir, err)
 	}
 	return nil
+}
+
+func (p *Processor) copyTvSeason(ctx context.Context, entry Entry) error {
+	if entry.NumberOfFiles < 2 {
+		return fmt.Errorf("need at least 2 files, entry has %d", entry.NumberOfFiles)
+	}
+
+	seasonInfo, err := parseTvSeason(entry.Name)
+	if err != nil {
+		return err
+	}
+
+	dir, err := p.mkTvDir(ctx, seasonInfo)
+	if err != nil {
+		return fmt.Errorf("failed to create TV dir: %w", err)
+	}
+
+	entries, err := os.ReadDir(entry.ContentPath)
+	if err != nil {
+		return fmt.Errorf("failed to read dir %s: %w", entry.ContentPath, err)
+	}
+
+	for _, srcEntry := range entries {
+		if srcEntry.IsDir() || !strings.EqualFold(path.Ext(srcEntry.Name()), ".mkv") {
+			continue
+		}
+
+		episodeInfo, err := parseTvEpisode(srcEntry.Name())
+		if err != nil {
+			return err
+		}
+		episodeInfo.Season = seasonInfo.Season
+
+		if err := p.copyFile(path.Clean(path.Join(entry.ContentPath, srcEntry.Name())), path.Clean(path.Join(dir, episodeInfo.ToEpisodeName(path.Ext(srcEntry.Name()))))); err != nil {
+			return fmt.Errorf("failed to copy: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (p *Processor) copyTvSingle(ctx context.Context, entry Entry) error {
+	if entry.NumberOfFiles > 1 {
+		return errors.New("more than one file")
+	}
+
+	info, err := parseTvEpisode(entry.Name)
+	if err != nil {
+		return err
+	}
+
+	dir, err := p.mkTvDir(ctx, info)
+	if err != nil {
+		return fmt.Errorf("failed to create TV dir: %w", err)
+	}
+
+	if err := p.copyFile(entry.ContentPath, path.Clean(path.Join(dir, info.ToEpisodeName(path.Ext(entry.ContentPath))))); err != nil {
+		return fmt.Errorf("failed to copy: %w", err)
+	}
+
+	return nil
+}
+
+func (p *Processor) mkTvDir(ctx context.Context, info TvInfo) (string, error) {
+	// in case the case is wrong, check each directory to see if it matches
+	entries, err := os.ReadDir(p.cfg.TvOutputPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read dir %s: %w", p.cfg.TvOutputPath, err)
+	}
+
+	var dir string
+	for _, entry := range entries {
+		if entry.IsDir() && strings.EqualFold(entry.Name(), info.Name) {
+			dir = path.Clean(path.Join(p.cfg.TvOutputPath, entry.Name()))
+			break
+		}
+	}
+
+	if dir == "" {
+		// doesn't exist, need to create it
+		destination := path.Clean(path.Join(p.cfg.TvOutputPath, info.Name))
+		p.logger.LogAttrs(ctx, slog.LevelInfo, "Creating TV show directory", slog.String("dir", destination))
+
+		if !p.cfg.DryRun {
+			if err := os.Mkdir(destination, 0666); err != nil {
+				return "", fmt.Errorf("failed to create dir %s: %w", destination, err)
+			}
+		}
+	}
+
+	return dir, nil
+}
+
+type TvInfo struct {
+	Name    string
+	Season  int
+	Episode int
+}
+
+func (t TvInfo) ToEpisodeName(ext string) string {
+	return fmt.Sprintf("%s S%02dE%02d%s", t.Name, t.Season, t.Episode, ext)
+}
+
+func parseTvSeason(name string) (tv TvInfo, err error) {
+	if reg, err := regexp.Compile(`(?i)^(.*?)S(\d+)`); err != nil {
+		return tv, fmt.Errorf("failed to compile season regex: %w", err)
+	} else if matches := reg.FindStringSubmatch(name); matches == nil {
+		return tv, fmt.Errorf("failed to extract TV name/season from name %s", name)
+	} else if season, err := strconv.Atoi(matches[2]); err != nil {
+		return tv, fmt.Errorf("failed to convert season %s to number: %w", matches[2], err)
+	} else {
+		return TvInfo{
+			Name:   matches[1],
+			Season: season,
+		}, nil
+	}
+}
+
+func parseTvEpisode(name string) (tv TvInfo, err error) {
+	if reg, err := regexp.Compile(`(?i)^(.*?)S(\d+)\.?E(\d+)`); err != nil {
+		return tv, fmt.Errorf("failed to compile episode regex: %w", err)
+	} else if matches := reg.FindStringSubmatch(name); matches == nil {
+		return tv, fmt.Errorf("failed to extract TV name/season/episode from name %s", name)
+	} else if season, err := strconv.Atoi(matches[2]); err != nil {
+		return tv, fmt.Errorf("failed to convert season %s to number: %w", matches[2], err)
+	} else if episode, err := strconv.Atoi(matches[3]); err != nil {
+		return tv, fmt.Errorf("failed to convert episode %s to number: %w", matches[3], err)
+	} else {
+		return TvInfo{
+			Name:    matches[1],
+			Season:  season,
+			Episode: episode,
+		}, nil
+	}
 }
