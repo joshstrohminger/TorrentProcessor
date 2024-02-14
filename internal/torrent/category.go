@@ -7,7 +7,16 @@ const (
 	MovieSingle Category = iota
 	TvSingle
 	TvSeason
+	Manual
 	Ignore
 )
 
-var AllCategories = []Category{MovieSingle, TvSingle, TvSeason, Ignore}
+var AllCategories []Category
+
+func init() {
+	// this only works because we're using iota, starting from zero
+	AllCategories = make([]Category, len(_Category_index))
+	for i := range _Category_index {
+		AllCategories[i] = Category(i)
+	}
+}

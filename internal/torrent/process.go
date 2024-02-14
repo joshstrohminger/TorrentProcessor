@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dustin/go-humanize"
 	"github.com/joshstrohminger/TorrentProcessor/internal/config"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	"io"
 	"io/fs"
 	"log/slog"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -27,6 +29,8 @@ type Processor struct {
 func NewProcessor(cfg config.Process, logger *slog.Logger) *Processor {
 	return &Processor{cfg, logger}
 }
+
+var ErrManualProcessing = errors.New("manual handling required")
 
 func (p *Processor) Process(ctx context.Context, entry Entry) error {
 	p.logger.LogAttrs(ctx, slog.LevelInfo, "Processing", slog.Any("config", p.cfg), slog.Any("entry", entry))
@@ -46,6 +50,8 @@ func (p *Processor) Process(ctx context.Context, entry Entry) error {
 		return p.copyTvSingle(ctx, entry)
 	case TvSeason:
 		return p.copyTvSeason(ctx, entry)
+	case Manual:
+		return ErrManualProcessing
 	case Ignore:
 		return nil
 	default:
@@ -56,12 +62,12 @@ func (p *Processor) Process(ctx context.Context, entry Entry) error {
 func (p *Processor) copyMovieSingle(ctx context.Context, entry Entry) error {
 	subtitles := &FileFilter{
 		Filter: func(s string) bool {
-			return slices.Contains(subtitleExts, path.Ext(s))
+			return slices.Contains(subtitleExts, filepath.Ext(s))
 		},
 	}
 	videos := &FileFilter{
 		Filter: func(s string) bool {
-			return !slices.Contains(subtitleExts, path.Ext(s))
+			return !slices.Contains(subtitleExts, filepath.Ext(s))
 		},
 	}
 	if err := filterFiles(entry.ContentPath, subtitles, videos); err != nil {
@@ -74,8 +80,8 @@ func (p *Processor) copyMovieSingle(ctx context.Context, entry Entry) error {
 		return fmt.Errorf("found %d video files but can only handle one: %v", len(videos.Files), videos.Files)
 	}
 
-	destination := path.Clean(path.Join(p.cfg.MovieOutputPath, entry.Name+path.Ext(videos.Files[0])))
-	if _, err := os.Stat(destination); err != nil {
+	destination := filepath.Clean(filepath.Join(p.cfg.MovieOutputPath, entry.Name+filepath.Ext(videos.Files[0])))
+	if _, err := os.Stat(destination); err == nil {
 		return fmt.Errorf("video destination already exists: %s", destination)
 	}
 
@@ -88,12 +94,12 @@ func (p *Processor) copyMovieSingle(ctx context.Context, entry Entry) error {
 		processed := make(map[string]struct{})
 
 		for _, file := range subtitles.Files {
-			ext := path.Ext(file)
+			ext := filepath.Ext(file)
 			if _, exists := processed[ext]; exists {
 				p.logger.LogAttrs(ctx, slog.LevelWarn, "Subtitle skipped because we've already processed one for this extension", slog.String("subtitle", file))
 			}
 			processed[ext] = struct{}{}
-			destination = path.Clean(path.Join(p.cfg.MovieOutputPath, fmt.Sprintf("%s.en%s", entry.Name, ext)))
+			destination = filepath.Clean(filepath.Join(p.cfg.MovieOutputPath, fmt.Sprintf("%s.en%s", entry.Name, ext)))
 
 			if err := p.copyFile(file, destination); err != nil {
 				return fmt.Errorf("failed to copy subtitle: %w", err)
@@ -105,7 +111,14 @@ func (p *Processor) copyMovieSingle(ctx context.Context, entry Entry) error {
 }
 
 func (p *Processor) copyFile(src string, dst string) error {
-	p.logger.Info("Copying from %s to %s", src, dst)
+	var size int64
+	if info, err := os.Stat(src); err != nil {
+		return fmt.Errorf("source file '%s' doesn't exist", src)
+	} else {
+		size = info.Size()
+	}
+
+	p.logger.Info("Copying", slog.Int64("bytes", size), slog.String("size", humanize.Bytes(uint64(size))), slog.String("source", src), slog.String("destination", dst))
 
 	if _, err := os.Stat(dst); err == nil {
 		return fmt.Errorf("destination already exists: %s", dst)
@@ -140,7 +153,7 @@ func filterFiles(dir string, filters ...*FileFilter) error {
 		if !d.IsDir() {
 			for _, filter := range filters {
 				if filter.Filter(d.Name()) {
-					filter.Files = append(filter.Files, d.Name())
+					filter.Files = append(filter.Files, path)
 				}
 			}
 		}
@@ -172,7 +185,7 @@ func (p *Processor) copyTvSeason(ctx context.Context, entry Entry) error {
 	}
 
 	for _, srcEntry := range entries {
-		if srcEntry.IsDir() || !strings.EqualFold(path.Ext(srcEntry.Name()), ".mkv") {
+		if srcEntry.IsDir() || !strings.EqualFold(filepath.Ext(srcEntry.Name()), ".mkv") {
 			continue
 		}
 
@@ -182,7 +195,7 @@ func (p *Processor) copyTvSeason(ctx context.Context, entry Entry) error {
 		}
 		episodeInfo.Season = seasonInfo.Season
 
-		if err := p.copyFile(path.Clean(path.Join(entry.ContentPath, srcEntry.Name())), path.Clean(path.Join(dir, episodeInfo.ToEpisodeName(path.Ext(srcEntry.Name()))))); err != nil {
+		if err := p.copyFile(filepath.Clean(filepath.Join(entry.ContentPath, srcEntry.Name())), filepath.Clean(filepath.Join(dir, episodeInfo.ToEpisodeName(filepath.Ext(srcEntry.Name()))))); err != nil {
 			return fmt.Errorf("failed to copy: %w", err)
 		}
 	}
@@ -205,7 +218,7 @@ func (p *Processor) copyTvSingle(ctx context.Context, entry Entry) error {
 		return fmt.Errorf("failed to create TV dir: %w", err)
 	}
 
-	if err := p.copyFile(entry.ContentPath, path.Clean(path.Join(dir, info.ToEpisodeName(path.Ext(entry.ContentPath))))); err != nil {
+	if err := p.copyFile(entry.ContentPath, filepath.Clean(filepath.Join(dir, info.ToEpisodeName(filepath.Ext(entry.ContentPath))))); err != nil {
 		return fmt.Errorf("failed to copy: %w", err)
 	}
 
@@ -222,14 +235,14 @@ func (p *Processor) mkTvDir(ctx context.Context, info TvInfo) (string, error) {
 	var dir string
 	for _, entry := range entries {
 		if entry.IsDir() && strings.EqualFold(entry.Name(), info.Name) {
-			dir = path.Clean(path.Join(p.cfg.TvOutputPath, entry.Name()))
+			dir = filepath.Clean(filepath.Join(p.cfg.TvOutputPath, entry.Name()))
 			break
 		}
 	}
 
 	if dir == "" {
 		// doesn't exist, need to create it
-		destination := path.Clean(path.Join(p.cfg.TvOutputPath, info.Name))
+		destination := filepath.Clean(filepath.Join(p.cfg.TvOutputPath, info.Name))
 		p.logger.LogAttrs(ctx, slog.LevelInfo, "Creating TV show directory", slog.String("dir", destination))
 
 		if !p.cfg.DryRun {
@@ -261,7 +274,7 @@ func parseTvSeason(name string) (tv TvInfo, err error) {
 		return tv, fmt.Errorf("failed to convert season %s to number: %w", matches[2], err)
 	} else {
 		return TvInfo{
-			Name:   matches[1],
+			Name:   properCase(matches[1]),
 			Season: season,
 		}, nil
 	}
@@ -278,9 +291,15 @@ func parseTvEpisode(name string) (tv TvInfo, err error) {
 		return tv, fmt.Errorf("failed to convert episode %s to number: %w", matches[3], err)
 	} else {
 		return TvInfo{
-			Name:    matches[1],
+			Name:    properCase(matches[1]),
 			Season:  season,
 			Episode: episode,
 		}, nil
 	}
+}
+
+var caseRegex = regexp.MustCompile(`[. ]+`)
+
+func properCase(name string) string {
+	return cases.Title(language.AmericanEnglish).String(strings.TrimSpace(caseRegex.ReplaceAllString(name, " ")))
 }

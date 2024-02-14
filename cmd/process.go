@@ -25,7 +25,7 @@ var processCmd = &cobra.Command{
 			return err
 		} else if dryRun, err := cmd.Flags().GetBool("dry-run"); err != nil {
 			return err
-		} else if work, err := work.New(appCfg.WorkPath); err != nil {
+		} else if work, err := work.New(appCfg.WorkPath, logger); err != nil {
 			return fmt.Errorf("failed to create work list: %w", err)
 		} else {
 			cfg := config.Process{
@@ -50,6 +50,7 @@ func init() {
 }
 
 func processWork(ctx context.Context, w *work.Work, cfg config.Process) error {
+	logger.Info("Watching")
 	delays := []time.Duration{
 		time.Second,
 		2 * time.Second,
@@ -63,13 +64,13 @@ func processWork(ctx context.Context, w *work.Work, cfg config.Process) error {
 	doneHandler := w.Remove
 	if cfg.DryRun {
 		doneHandler = func(entry torrent.Entry) error {
-			w.Ignore(entry)
+			w.Ignore(entry, nil)
 			return nil
 		}
 	}
 
 	for {
-		if entry, err := w.Next(); err != nil {
+		if entry, err := w.Next(cfg.MaxRetries >= 0 && retries >= cfg.MaxRetries); err != nil {
 			var errParse work.ErrParse
 			if errors.As(err, &errParse) {
 				if cfg.MaxRetries < 0 || retries < cfg.MaxRetries {
@@ -102,8 +103,7 @@ func processWork(ctx context.Context, w *work.Work, cfg config.Process) error {
 					return nil
 				}
 			} else if err = processor.Process(ctx, *entry); err != nil {
-				w.Ignore(*entry)
-				return fmt.Errorf("failed to process entry %#v, ignoring until restart: %w", entry, err)
+				w.Ignore(*entry, fmt.Errorf("failed to process entry %#v, ignoring until restart: %w", entry, err))
 			} else if err = doneHandler(*entry); err != nil {
 				return fmt.Errorf("failed to remove entry %#v: %w", entry, err)
 			} else {
@@ -111,7 +111,7 @@ func processWork(ctx context.Context, w *work.Work, cfg config.Process) error {
 				if cfg.Limit > 0 {
 					cfg.Limit--
 					if cfg.Limit == 0 {
-						logger.LogAttrs(ctx, slog.LevelDebug, "Limit reached")
+						logger.Debug("Limit reached")
 						return nil
 					}
 				}

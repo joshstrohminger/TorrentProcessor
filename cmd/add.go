@@ -16,7 +16,7 @@ var addCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if cfg, err := getAppConfig(cmd); err != nil {
 			return err
-		} else if work, err := work.New(cfg.WorkPath); err != nil {
+		} else if work, err := work.New(cfg.WorkPath, logger); err != nil {
 			return fmt.Errorf("failed to create work list: %w", err)
 		} else if name, err := cmd.Flags().GetString("name"); err != nil {
 			return err
@@ -34,19 +34,16 @@ var addCmd = &cobra.Command{
 			return err
 		} else if hash, err := cmd.Flags().GetString("hash"); err != nil {
 			return err
-		} else if outputPath, err := cmd.Flags().GetString("output-path"); err != nil {
-			return err
 		} else {
 			entry := torrent.Entry{
-				OutputPath:    outputPath,
-				Name:          name,
+				Name:          trimQuotes(name),
 				Category:      category,
-				ContentPath:   contentPath,
+				ContentPath:   trimQuotes(contentPath),
 				NumberOfFiles: numFiles,
 				Size:          size,
-				Tracker:       tracker,
-				Hash:          hash,
-				SavePath:      savePath,
+				Tracker:       trimQuotes(tracker),
+				Hash:          trimQuotes(hash),
+				SavePath:      trimQuotes(savePath),
 			}
 			if err := work.Add(entry); err != nil {
 				return fmt.Errorf("failed to add entry %#v: %w", entry, err)
@@ -54,6 +51,10 @@ var addCmd = &cobra.Command{
 		}
 		return nil
 	},
+}
+
+func trimQuotes(s string) string {
+	return strings.Trim(s, "'\"")
 }
 
 func getEnumFlag[T fmt.Stringer](cmd *cobra.Command, name string, possible []T) (enum T, err error) {
@@ -87,7 +88,6 @@ func init() {
 	addCmd.Flags().Int("size", 0, "Torrent size in bytes")
 	addCmd.Flags().String("tracker", "", "Tracker used for this torrent")
 	addCmd.Flags().String("hash", "", "Info hash")
-	addCmd.Flags().String("output-path", "", "Root directory to output files")
 
 	addCmd.Flags().VisitAll(func(flag *pflag.Flag) {
 		if err := addCmd.MarkFlagRequired(flag.Name); err != nil {

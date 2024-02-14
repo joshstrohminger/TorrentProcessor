@@ -11,12 +11,13 @@ func _() {
 	_ = x[MovieSingle-0]
 	_ = x[TvSingle-1]
 	_ = x[TvSeason-2]
-	_ = x[Ignore-3]
+	_ = x[Manual-3]
+	_ = x[Ignore-4]
 }
 
-const _Category_name = "MovieSingleTvSingleTvSeasonIgnore"
+const _Category_name = "MovieSingleTvSingleTvSeasonManualIgnore"
 
-var _Category_index = [...]uint8{0, 11, 19, 27, 33}
+var _Category_index = [...]uint8{0, 11, 19, 27, 33, 39}
 
 func (i Category) String() string {
 	if i < 0 || i >= Category(len(_Category_index)-1) {
