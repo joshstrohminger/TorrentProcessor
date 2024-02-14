@@ -90,7 +90,7 @@ func init() {
 	addCmd.Flags().String("output-path", "", "Root directory to output files")
 
 	addCmd.Flags().VisitAll(func(flag *pflag.Flag) {
-		if err := rootCmd.MarkFlagRequired(flag.Name); err != nil {
+		if err := addCmd.MarkFlagRequired(flag.Name); err != nil {
 			panic(fmt.Errorf("failed to mark flag '%s' required: %v", flag.Name, err))
 		}
 	})

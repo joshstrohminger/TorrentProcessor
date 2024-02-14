@@ -65,6 +65,8 @@ func (w *Work) Next() (*torrent.Entry, error) {
 	} else if err = json.Unmarshal(data, entry); err != nil {
 		return nil, ErrParse{err, filepath}
 	} else if expectedPath := w.getFilepath(*entry); expectedPath != filepath {
+		// mark a failed file as processed so we ignore it since the contents have issues
+		w.processed[file.Name()] = struct{}{}
 		return nil, fmt.Errorf("file '%s' should actually be named '%s' based on the contents", filepath, expectedPath)
 	}
 	return entry, nil

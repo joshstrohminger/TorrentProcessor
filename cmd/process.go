@@ -21,8 +21,6 @@ var processCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if appCfg, err := getAppConfig(cmd); err != nil {
 			return err
-		} else if maxRetries, err := cmd.Flags().GetInt("retries"); err != nil {
-			return err
 		} else if limit, err := cmd.Flags().GetInt("limit"); err != nil {
 			return err
 		} else if dryRun, err := cmd.Flags().GetBool("dry-run"); err != nil {
@@ -31,10 +29,9 @@ var processCmd = &cobra.Command{
 			return fmt.Errorf("failed to create work list: %w", err)
 		} else {
 			cfg := config.Process{
-				App:        appCfg,
-				DryRun:     dryRun,
-				Limit:      limit,
-				MaxRetries: maxRetries,
+				App:    appCfg,
+				DryRun: dryRun,
+				Limit:  limit,
 			}
 			ctx, cancel := signal.NotifyContext(cmd.Context(), os.Interrupt)
 			defer cancel()
@@ -47,7 +44,6 @@ var processCmd = &cobra.Command{
 }
 
 func init() {
-	processCmd.Flags().Int("retries", 3, "Maximum number of retries when trying to read the next entry.")
 	processCmd.Flags().Int("limit", -1, "Limit the number of entries processed before exiting.")
 	processCmd.Flags().Bool("dry-run", false, "Don't move files or entries, just log what would be done.")
 	rootCmd.AddCommand(processCmd)
@@ -62,6 +58,7 @@ func processWork(ctx context.Context, w *work.Work, cfg config.Process) error {
 		30 * time.Second,
 	}
 	retries := 0
+	processor := torrent.NewProcessor(cfg, logger)
 
 	doneHandler := w.Remove
 	if cfg.DryRun {
@@ -95,25 +92,28 @@ func processWork(ctx context.Context, w *work.Work, cfg config.Process) error {
 				err = fmt.Errorf("exceeded %d retries: %w", cfg.MaxRetries, err)
 			}
 			return fmt.Errorf("failed to get next work entry: %w", err)
-		} else if entry == nil {
-			select {
-			case <-time.After(5 * time.Second):
-				continue
-			case <-ctx.Done():
-				return nil
-			}
-		} else if err = torrent.NewProcessor(cfg, logger).Process(ctx, *entry); err != nil {
-			w.Ignore(*entry)
-			return fmt.Errorf("failed to process entry %#v, ignoring until restart: %w", entry, err)
-		} else if err = doneHandler(*entry); err != nil {
-			return fmt.Errorf("failed to remove entry %#v: %w", entry, err)
 		} else {
-			logger.LogAttrs(ctx, slog.LevelInfo, "Success", slog.Any("entry", entry))
-			if cfg.Limit > 0 {
-				cfg.Limit--
-				if cfg.Limit == 0 {
-					logger.LogAttrs(ctx, slog.LevelDebug, "Limit reached")
+			retries = 0
+			if entry == nil {
+				select {
+				case <-time.After(cfg.DormantPeriod):
+					continue
+				case <-ctx.Done():
 					return nil
+				}
+			} else if err = processor.Process(ctx, *entry); err != nil {
+				w.Ignore(*entry)
+				return fmt.Errorf("failed to process entry %#v, ignoring until restart: %w", entry, err)
+			} else if err = doneHandler(*entry); err != nil {
+				return fmt.Errorf("failed to remove entry %#v: %w", entry, err)
+			} else {
+				logger.LogAttrs(ctx, slog.LevelInfo, "Success", slog.Any("entry", entry))
+				if cfg.Limit > 0 {
+					cfg.Limit--
+					if cfg.Limit == 0 {
+						logger.LogAttrs(ctx, slog.LevelDebug, "Limit reached")
+						return nil
+					}
 				}
 			}
 		}

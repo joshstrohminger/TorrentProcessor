@@ -6,19 +6,21 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"time"
 )
 
 type App struct {
 	WorkPath        string
 	MovieOutputPath string
 	TvOutputPath    string
+	DormantPeriod   time.Duration
+	MaxRetries      int
 }
 
 type Process struct {
 	App
-	DryRun     bool
-	Limit      int
-	MaxRetries int
+	DryRun bool
+	Limit  int
 }
 
 func (a App) Validate() error {
