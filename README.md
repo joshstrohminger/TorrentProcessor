@@ -5,3 +5,9 @@ This is a utility for handling torrents once they have been completed. The `add`
 ## Logging
 
 Structured logs are written to the same directory as the executable. If there is an issue determining that directory, it will fall back to the [lumberjack](https://github.com/natefinch/lumberjack) default location. Each command writes to a separate logfile and it's assumed that only one instance of each command is running at a time.
+
+## Building
+
+```go
+go build -o ./bin/tp .
+```
