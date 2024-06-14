@@ -1,0 +1,8 @@
+workPath: ""
+movieOutputPath: ""
+tvOutputPath: ""
+maxRetries: 5
+dormantPeriod: "30s"
+api:
+  host: localhost
+  port: 8080

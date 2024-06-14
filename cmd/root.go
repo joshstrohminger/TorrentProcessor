@@ -2,16 +2,17 @@ package cmd
 
 import (
 	"fmt"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/joshstrohminger/TorrentProcessor/internal/config"
 	"github.com/mitchellh/mapstructure"
 	slogmulti "github.com/samber/slog-multi"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"gopkg.in/natefinch/lumberjack.v2"
-	"log/slog"
-	"os"
-	"path/filepath"
-	"time"
 )
 
 var logger *slog.Logger
@@ -35,6 +36,9 @@ var rootCmd = &cobra.Command{
 			With(slog.String("cmd", cmd.Use))
 
 		slog.SetDefault(logger)
+	},
+	CompletionOptions: cobra.CompletionOptions{
+		DisableDefaultCmd: true,
 	},
 }
 
@@ -67,15 +71,14 @@ func getAppConfig(cmd *cobra.Command) (cfg config.App, err error) {
 		}
 	}
 
-	// set default config values
-	cfg.MaxRetries = 5
-	cfg.DormantPeriod = 30 * time.Second
+	viper.AutomaticEnv()
+	viper.EnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
+	viper.SetEnvPrefix("TP")
 
 	if err = viper.ReadInConfig(); err != nil {
 		err = fmt.Errorf("failed to read config file %s: %w", configPath, err)
 	} else if err = viper.Unmarshal(&cfg, func(decoderConfig *mapstructure.DecoderConfig) {
 		decoderConfig.ErrorUnused = true
-		decoderConfig.WeaklyTypedInput = false
 	}); err != nil {
 		err = fmt.Errorf("failed to unmarshal config: %w", err)
 	} else if err = cfg.Validate(); err != nil {

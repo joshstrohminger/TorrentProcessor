@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
+
+	"github.com/joshstrohminger/TorrentProcessor/internal/config"
 	"github.com/joshstrohminger/TorrentProcessor/internal/torrent"
 	"github.com/joshstrohminger/TorrentProcessor/internal/work"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"strings"
 )
 
 var addCmd = &cobra.Command{
@@ -34,6 +36,8 @@ var addCmd = &cobra.Command{
 			return err
 		} else if hash, err := cmd.Flags().GetString("hash"); err != nil {
 			return err
+		} else if process, err := cmd.Flags().GetBool("process"); err != nil {
+			return err
 		} else {
 			entry := torrent.Entry{
 				Name:          trimQuotes(name),
@@ -47,6 +51,13 @@ var addCmd = &cobra.Command{
 			}
 			if err := work.Add(entry); err != nil {
 				return fmt.Errorf("failed to add entry %#v: %w", entry, err)
+			}
+
+			if process {
+				processor := torrent.NewProcessor(config.Process{App: cfg}, logger)
+				if err := processor.Process(cmd.Context(), entry); err != nil {
+					return fmt.Errorf("failed to process entry: %w", err)
+				}
 			}
 		}
 		return nil
@@ -94,6 +105,8 @@ func init() {
 			panic(fmt.Errorf("failed to mark flag '%s' required: %v", flag.Name, err))
 		}
 	})
+
+	addCmd.Flags().Bool("process", false, "Process the torrent after adding it. This should not be used if another instance is already processing entries.")
 
 	rootCmd.AddCommand(addCmd)
 }

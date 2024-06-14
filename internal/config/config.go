@@ -10,11 +10,21 @@ import (
 )
 
 type App struct {
-	WorkPath        string
-	MovieOutputPath string
-	TvOutputPath    string
-	DormantPeriod   time.Duration
-	MaxRetries      int
+	WorkPath        string        `yaml:"work_path,omitempty"`
+	MovieOutputPath string        `yaml:"movie_output_path,omitempty"`
+	TvOutputPath    string        `yaml:"tv_output_path,omitempty"`
+	DormantPeriod   time.Duration `yaml:"dormant_period,omitempty"`
+	MaxRetries      int           `yaml:"max_retries,omitempty"`
+	Api             Api           `yaml:"api,omitempty"`
+}
+
+type Api struct {
+	Host string `yaml:"host,omitempty"`
+	Port uint16 `yaml:"port,omitempty"`
+}
+
+func (a Api) String() string {
+	return fmt.Sprintf("%s:%d", a.Host, a.Port)
 }
 
 type Process struct {

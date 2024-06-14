@@ -4,14 +4,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
+	"time"
+
+	"github.com/joshstrohminger/TorrentProcessor/internal/api"
 	"github.com/joshstrohminger/TorrentProcessor/internal/config"
 	"github.com/joshstrohminger/TorrentProcessor/internal/torrent"
 	"github.com/joshstrohminger/TorrentProcessor/internal/work"
 	"github.com/spf13/cobra"
-	"log/slog"
-	"os"
-	"os/signal"
-	"time"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 var processCmd = &cobra.Command{
@@ -44,7 +53,7 @@ var processCmd = &cobra.Command{
 }
 
 func init() {
-	processCmd.Flags().Int("limit", -1, "Limit the number of entries processed before exiting.")
+	processCmd.Flags().Int("limit", 0, "Limit the number of entries processed before exiting. -1 to run indefinitely, 0 to run until no more entries are found.")
 	processCmd.Flags().Bool("dry-run", false, "Don't move files or entries, just log what would be done.")
 	rootCmd.AddCommand(processCmd)
 }
@@ -72,6 +81,8 @@ func processWork(ctx context.Context, w *work.Work, cfg config.Process) error {
 	for {
 		if entry, err := w.Next(cfg.MaxRetries >= 0 && retries >= cfg.MaxRetries); err != nil {
 			var errParse work.ErrParse
+			var errIgnored work.ErrIgnored
+
 			if errors.As(err, &errParse) {
 				if cfg.MaxRetries < 0 || retries < cfg.MaxRetries {
 					var delay time.Duration
@@ -91,11 +102,18 @@ func processWork(ctx context.Context, w *work.Work, cfg config.Process) error {
 					}
 				}
 				err = fmt.Errorf("exceeded %d retries: %w", cfg.MaxRetries, err)
+			} else if errors.As(err, &errIgnored) {
+				// go to the next loop iteration, no need for a delay when ignoring a repeatedly failed entry
+				continue
 			}
 			return fmt.Errorf("failed to get next work entry: %w", err)
 		} else {
 			retries = 0
 			if entry == nil {
+				if cfg.Limit == 0 {
+					// done processing all available entries
+					return nil
+				}
 				select {
 				case <-time.After(cfg.DormantPeriod):
 					continue
@@ -117,5 +135,121 @@ func processWork(ctx context.Context, w *work.Work, cfg config.Process) error {
 				}
 			}
 		}
+	}
+}
+
+type Server struct {
+	api.UnimplementedControlServiceServer
+
+	config  config.App
+	started time.Time
+	exit    chan int
+
+	mu         sync.Mutex
+	grpcServer *grpc.Server
+}
+
+func newServer(config config.App) *Server {
+	return &Server{
+		config:  config,
+		exit:    make(chan int, 1),
+		started: time.Now(),
+	}
+}
+
+func (s *Server) run() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.grpcServer != nil {
+		return fmt.Errorf("already running")
+	}
+
+	lis, err := net.Listen("tcp", s.config.Api.String())
+	if err != nil {
+		return fmt.Errorf("failed to listen to %s: %w", s.config.Api, err)
+	}
+
+	s.grpcServer = grpc.NewServer()
+	api.RegisterControlServiceServer(s.grpcServer, s)
+
+	go func() {
+		if err := s.grpcServer.Serve(lis); err != nil {
+			logger.LogAttrs(rootCmd.Context(), slog.LevelError, "gRPC server failed", slog.Any("error", err))
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		s.grpcServer = nil
+	}()
+
+	return nil
+}
+
+func (s *Server) stop() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.grpcServer != nil {
+		logger.Debug("Stopping gRPC server")
+
+		ctx, timeoutCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer timeoutCancel()
+
+		ctx, sigCancel := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
+		defer sigCancel()
+
+		stopped := make(chan struct{})
+
+		go func() {
+			logger.Debug("Force stopping gRPC server")
+			s.grpcServer.GracefulStop()
+			close(stopped)
+		}()
+
+		select {
+		case <-ctx.Done():
+			s.grpcServer.Stop()
+		case <-stopped:
+		}
+	}
+
+	s.grpcServer = nil
+}
+
+func (s *Server) GetConfig(context.Context, *api.Empty) (*api.Config, error) {
+	return &api.Config{
+		WorkPath:        s.config.WorkPath,
+		MovieOutputPath: s.config.MovieOutputPath,
+		TvOutputPath:    s.config.TvOutputPath,
+		DormantPeriod:   durationpb.New(s.config.DormantPeriod),
+		MaxRetries:      uint32(s.config.MaxRetries),
+	}, nil
+}
+
+func (s *Server) Check(context.Context, *api.Empty) (*api.ProcessingStatus, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Check not implemented")
+}
+
+func (s *Server) Stop(context.Context, *api.Empty) (*api.ProcessingStatus, error) {
+	logger.Info("Stopping")
+	s.stop()
+	s.exit <- 0
+	return s.status(), nil
+}
+
+func (s *Server) Restart(context.Context, *api.Empty) (*api.ProcessingStatus, error) {
+	logger.Info("Restarting")
+	s.stop()
+	s.exit <- 1
+	return s.status(), nil
+}
+
+func (s *Server) status() *api.ProcessingStatus {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return &api.ProcessingStatus{
+		Running: s.grpcServer != nil,
 	}
 }

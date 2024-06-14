@@ -5,13 +5,12 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "type": "node",
+            "name": "Go Help",
+            "type": "go",
             "request": "launch",
-            "name": "Copy Command",
-            "program": "${workspaceFolder}/app.js",
-            "args":[
-                "copy", "-N", "a", "-L", "TvSingle", "-R", "a", "-D", "d", "-C", "d", "-Z", "a", "-T", "a", "-I", "s", "-f", "asd"
-            ]
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": ["--help"]
         }
     ]
 }

@@ -1,0 +1,8 @@
+services:
+  torrents:
+    build: .
+    container_name: processor
+    restart: unless-stopped
+    command: ["process", "--dry-run"]
+    volumes:
+      - "./config.json:/config.json"

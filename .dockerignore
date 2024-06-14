@@ -1,0 +1,5 @@
+.*
+*.md
+bin
+Dockerfile
+compose.yml
