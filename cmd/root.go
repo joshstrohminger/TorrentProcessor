@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	_ "embed"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"time"
@@ -22,6 +24,9 @@ var logger *slog.Logger
 
 const logNameFormat = "tp.%s.log"
 
+//go:embed .version
+var version string
+
 const longDescription = `
 This is intended to be run as two separate processes; one using the
 'process' command which runs as a service/daemon, and one called by
@@ -30,6 +35,7 @@ directory of JSON files as a queue of torrents to be processed.`
 
 var rootCmd = &cobra.Command{
 	Short:         "Utility for processing completed torrents",
+	Version:       version,
 	SilenceErrors: true, // we'll log errors on our own
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if cmd.Name() == "help" {
@@ -191,4 +197,37 @@ func init() {
 	cobra.EnableCaseInsensitive = true
 	rootCmd.PersistentFlags().String("config", "", "Path to the config file to use.")
 	rootCmd.Long = rootCmd.Short + "\n" + longDescription
+
+	if exe, err := os.Executable(); err == nil {
+		const timeFormat = "Jan 2, 2006 at 3:04:05 PM"
+
+		if info, err := os.Stat(exe); err == nil {
+			rootCmd.Version = fmt.Sprintf("%s, installed %s", rootCmd.Version, info.ModTime().Format(timeFormat))
+		}
+
+		if info, ok := debug.ReadBuildInfo(); ok {
+			settings := make(map[string]string)
+			for _, setting := range info.Settings {
+				settings[setting.Key] = setting.Value
+			}
+
+			revision, foundRevision := settings["vcs.revision"]
+			revisionTimeString, foundTime := settings["vcs.time"]
+			dirty, foundDirty := settings["vcs.modified"]
+			if foundRevision && foundTime {
+				var dirtyLabel string
+				if foundDirty && dirty == "true" {
+					dirtyLabel = " (dirty)"
+				}
+
+				if revisionTime, err := time.Parse(time.RFC3339, revisionTimeString); err == nil {
+					revisionTimeString = revisionTime.Local().Format(timeFormat)
+				}
+
+				rootCmd.Version = fmt.Sprintf("%s, from ref %s%s, committed %s", rootCmd.Version, revision, dirtyLabel, revisionTimeString)
+			} else {
+				fmt.Println(info.Settings)
+			}
+		}
+	}
 }
