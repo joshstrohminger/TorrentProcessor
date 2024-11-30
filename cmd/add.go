@@ -12,9 +12,10 @@ import (
 )
 
 var addCmd = &cobra.Command{
-	Use:   "add",
-	Short: "Add a torrent to be processed",
-	Long:  "Add a completed torrent to the work to be processed.",
+	Use:          "add",
+	Short:        "Add a torrent to be processed",
+	Long:         "Add a completed torrent to the work to be processed.",
+	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if cfg, err := getAppConfig(cmd); err != nil {
 			return err

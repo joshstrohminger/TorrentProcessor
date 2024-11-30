@@ -1,8 +1,11 @@
+# torrent processor config file
+
 workPath: ""
 movieOutputPath: ""
 tvOutputPath: ""
 maxRetries: 5
 dormantPeriod: "30s"
+logPath: ".logs"
 api:
   host: localhost
   port: 8080

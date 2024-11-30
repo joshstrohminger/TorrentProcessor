@@ -16,6 +16,7 @@ type App struct {
 	DormantPeriod   time.Duration `yaml:"dormant_period,omitempty"`
 	MaxRetries      int           `yaml:"max_retries,omitempty"`
 	Api             Api           `yaml:"api,omitempty"`
+	LogPath         string        `yaml:"logPath,omitempty"`
 }
 
 type Api struct {
@@ -42,9 +43,9 @@ func (a App) Validate() error {
 		field := v.Field(i)
 		name := t.Field(i).Name
 		if strings.HasSuffix(name, "Path") && field.Kind() == reflect.String {
-			p := field.String()
-			if _, err := os.Stat(p); err != nil {
-				errs = append(errs, fmt.Errorf("%s doesn't exist: %s", name, p))
+			path := field.String()
+			if _, err := os.Stat(path); err != nil {
+				errs = append(errs, fmt.Errorf("%s doesn't exist: %s", name, path))
 			}
 		}
 	}

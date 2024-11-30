@@ -24,9 +24,10 @@ import (
 )
 
 var processCmd = &cobra.Command{
-	Use:   "process",
-	Short: "Process queued torrents",
-	Long:  "Process completed torrents from the work.",
+	Use:          "process",
+	Short:        "Process queued torrents",
+	Long:         "Process completed torrents from the work.",
+	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if appCfg, err := getAppConfig(cmd); err != nil {
 			return err
