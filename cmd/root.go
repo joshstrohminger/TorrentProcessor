@@ -66,7 +66,7 @@ var rootCmd = &cobra.Command{
 		logger = slog.New(slogmulti.Fanout(stdoutLogger, jsonLogger)).With(slog.String("cmd", cmd.Use))
 		slog.SetDefault(logger)
 
-		logger.LogAttrs(cmd.Context(), slog.LevelInfo, "Parsed config", slog.Any("config", cfg), slog.String("path", viper.ConfigFileUsed()), slog.Any("args", os.Args))
+		logger.LogAttrs(cmd.Context(), slog.LevelInfo, "Parsed config", slog.Any("config", cfg), slog.String("path", viper.ConfigFileUsed()), slog.Any("args", os.Args), slog.String("version", version), slog.String("buildVersion", cmd.Root().Version))
 
 		// Log the log path to the console only
 		stdoutLogger.Handle(cmd.Context(), slog.NewRecord(time.Now(), slog.LevelInfo, "Logging to "+path, 0))
@@ -202,7 +202,7 @@ func init() {
 		const timeFormat = "Jan 2, 2006 at 3:04:05 PM"
 
 		if info, err := os.Stat(exe); err == nil {
-			rootCmd.Version = fmt.Sprintf("%s, installed %s", rootCmd.Version, info.ModTime().Format(timeFormat))
+			rootCmd.Version = fmt.Sprintf("%s, built %s", rootCmd.Version, info.ModTime().Format(timeFormat))
 		}
 
 		if info, ok := debug.ReadBuildInfo(); ok {
