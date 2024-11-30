@@ -4,10 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dustin/go-humanize"
-	"github.com/joshstrohminger/TorrentProcessor/internal/config"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -17,6 +13,11 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/dustin/go-humanize"
+	"github.com/joshstrohminger/TorrentProcessor/internal/config"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 var subtitleExts = []string{".srt", ".smi", ".ssa", ".ass", ".vtt"}
@@ -266,7 +267,7 @@ func (t TvInfo) ToEpisodeName(ext string) string {
 }
 
 func parseTvSeason(name string) (tv TvInfo, err error) {
-	if reg, err := regexp.Compile(`(?i)^(.*?)S(\d+)`); err != nil {
+	if reg, err := regexp.Compile(`(?i)^(.*?)(?:S|Season[\s._-]*)(\d+)`); err != nil {
 		return tv, fmt.Errorf("failed to compile season regex: %w", err)
 	} else if matches := reg.FindStringSubmatch(name); matches == nil {
 		return tv, fmt.Errorf("failed to extract TV name/season from name %s", name)
@@ -281,7 +282,7 @@ func parseTvSeason(name string) (tv TvInfo, err error) {
 }
 
 func parseTvEpisode(name string) (tv TvInfo, err error) {
-	if reg, err := regexp.Compile(`(?i)^(.*?)S(\d+)\.?E(\d+)`); err != nil {
+	if reg, err := regexp.Compile(`(?i)^(.*?)(?:S|Season[\s._-]*)(\d+)\.?(?:E|Episode[\s._-]*)(\d+)`); err != nil {
 		return tv, fmt.Errorf("failed to compile episode regex: %w", err)
 	} else if matches := reg.FindStringSubmatch(name); matches == nil {
 		return tv, fmt.Errorf("failed to extract TV name/season/episode from name %s", name)
