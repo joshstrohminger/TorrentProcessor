@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -115,7 +116,7 @@ func getAppConfig(cmd *cobra.Command) (cfg config.App, err error) {
 		return
 	}
 
-	if filepath.Ext(configPath) != "" {
+	if slices.Contains(viper.SupportedExts, strings.ToLower(strings.TrimPrefix(filepath.Ext(configPath), "."))) {
 		// file path provided, use it directly
 		viper.SetConfigFile(configPath)
 	} else {
