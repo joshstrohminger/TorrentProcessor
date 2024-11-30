@@ -10,18 +10,18 @@ import (
 )
 
 type App struct {
-	WorkPath        string        `yaml:"work_path,omitempty"`
-	MovieOutputPath string        `yaml:"movie_output_path,omitempty"`
-	TvOutputPath    string        `yaml:"tv_output_path,omitempty"`
-	DormantPeriod   time.Duration `yaml:"dormant_period,omitempty"`
-	MaxRetries      int           `yaml:"max_retries,omitempty"`
-	Api             Api           `yaml:"api,omitempty"`
-	LogPath         string        `yaml:"logPath,omitempty"`
+	WorkPath        string        `yaml:"workPath"`
+	MovieOutputPath string        `yaml:"movieOutputPath"`
+	TvOutputPath    string        `yaml:"tvOutputPath"`
+	DormantPeriod   time.Duration `yaml:"dormantPeriod"`
+	MaxRetries      int           `yaml:"maxRetries"`
+	Api             Api           `yaml:"api"`
+	LogPath         string        `yaml:"logPath"`
 }
 
 type Api struct {
-	Host string `yaml:"host,omitempty"`
-	Port uint16 `yaml:"port,omitempty"`
+	Host string `yaml:"host"`
+	Port uint16 `yaml:"port"`
 }
 
 func (a Api) String() string {

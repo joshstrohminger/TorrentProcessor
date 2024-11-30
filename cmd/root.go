@@ -124,6 +124,14 @@ func getAppConfig(cmd *cobra.Command) (cfg config.App, err error) {
 			viper.AddConfigPath(configPath)
 		}
 
+		if dir, err := os.UserConfigDir(); err == nil {
+			viper.AddConfigPath(filepath.Join(dir, "tp"))
+		}
+
+		if dir, err := os.UserHomeDir(); err == nil {
+			viper.AddConfigPath(dir)
+		}
+
 		if exe, err := os.Executable(); err == nil {
 			dir := filepath.Dir(exe)
 
@@ -134,14 +142,6 @@ func getAppConfig(cmd *cobra.Command) (cfg config.App, err error) {
 				return config.App{}, fmt.Errorf("failed to check if running from the temp dir: %w", err)
 			}
 
-			viper.AddConfigPath(dir)
-		}
-
-		if dir, err := os.UserConfigDir(); err == nil {
-			viper.AddConfigPath(filepath.Join(dir, "tp"))
-		}
-
-		if dir, err := os.UserHomeDir(); err == nil {
 			viper.AddConfigPath(dir)
 		}
 	}
