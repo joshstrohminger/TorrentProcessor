@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/joshstrohminger/TorrentProcessor/internal/config"
@@ -33,7 +34,7 @@ func NewProcessor(cfg config.Process, logger *slog.Logger) *Processor {
 
 var ErrManualProcessing = errors.New("manual handling required")
 
-func (p *Processor) Process(ctx context.Context, entry Entry) error {
+func (p *Processor) Process(ctx context.Context, entry Entry) (err error) {
 	p.logger.LogAttrs(ctx, slog.LevelInfo, "Processing", slog.Any("config", p.cfg), slog.Any("entry", entry))
 
 	if entry.NumberOfFiles <= 0 {
@@ -43,6 +44,14 @@ func (p *Processor) Process(ctx context.Context, entry Entry) error {
 	if _, err := os.Stat(entry.ContentPath); err != nil {
 		return fmt.Errorf("content path doesn't exist: %s", entry.ContentPath)
 	}
+
+	// log the elapsed time if successful
+	start := time.Now()
+	defer func() {
+		if err == nil {
+			p.logger.LogAttrs(ctx, slog.LevelDebug, "Completed", slog.Duration("elapsed", time.Since(start)))
+		}
+	}()
 
 	switch entry.Category {
 	case MovieSingle:
