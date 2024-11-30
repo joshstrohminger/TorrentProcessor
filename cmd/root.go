@@ -19,6 +19,8 @@ import (
 
 var logger *slog.Logger
 
+const logNameFormat = "tp.%s.log"
+
 var rootCmd = &cobra.Command{
 	SilenceErrors: true, // we'll log errors on our own
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
@@ -32,7 +34,7 @@ var rootCmd = &cobra.Command{
 			return err
 		}
 
-		relPath := filepath.Join(cfg.LogPath, "tp."+cmd.Use+".log")
+		relPath := filepath.Join(cfg.LogPath, fmt.Sprintf(logNameFormat, cmd.Name()))
 		path, err := filepath.Abs(relPath)
 		if err != nil {
 			return fmt.Errorf("failed to get absolute path for log file from %s: %w", relPath, err)

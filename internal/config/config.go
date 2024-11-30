@@ -13,10 +13,10 @@ type App struct {
 	WorkPath        string        `yaml:"workPath"`
 	MovieOutputPath string        `yaml:"movieOutputPath"`
 	TvOutputPath    string        `yaml:"tvOutputPath"`
+	LogPath         string        `yaml:"logPath"`
 	DormantPeriod   time.Duration `yaml:"dormantPeriod"`
 	MaxRetries      int           `yaml:"maxRetries"`
 	Api             Api           `yaml:"api"`
-	LogPath         string        `yaml:"logPath"`
 }
 
 type Api struct {

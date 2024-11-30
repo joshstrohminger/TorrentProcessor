@@ -113,6 +113,7 @@ func processWork(ctx context.Context, w *work.Work, cfg config.Process) error {
 			if entry == nil {
 				if cfg.Limit == 0 {
 					// done processing all available entries
+					logger.Info("Nothing left to process")
 					return nil
 				}
 				select {

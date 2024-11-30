@@ -1,8 +1,8 @@
 # torrent processor config file
 
-workPath: ""
-movieOutputPath: ""
-tvOutputPath: ""
+workPath: ".test/work"
+movieOutputPath: ".test/movies"
+tvOutputPath: ".test/tv"
 maxRetries: 5
 dormantPeriod: "30s"
 logPath: ".logs"
