@@ -50,7 +50,7 @@ var rootCmd = &cobra.Command{
 		logger = slog.New(slogmulti.Fanout(stdoutLogger, jsonLogger)).With(slog.String("cmd", cmd.Use))
 		slog.SetDefault(logger)
 
-		logger.LogAttrs(cmd.Context(), slog.LevelInfo, "Parsed config", slog.Any("config", cfg), slog.String("path", viper.ConfigFileUsed()))
+		logger.LogAttrs(cmd.Context(), slog.LevelInfo, "Parsed config", slog.Any("config", cfg), slog.String("path", viper.ConfigFileUsed()), slog.Any("args", os.Args))
 
 		// Log the log path to the console only
 		stdoutLogger.Handle(cmd.Context(), slog.NewRecord(time.Now(), slog.LevelInfo, "Logging to "+path, 0))
