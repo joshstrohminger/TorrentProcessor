@@ -22,7 +22,14 @@ var logger *slog.Logger
 
 const logNameFormat = "tp.%s.log"
 
+const longDescription = `
+This is intended to be run as two separate processes; one using the
+'process' command which runs as a service/daemon, and one called by
+the torrent client with the 'add' command. It will use a working
+directory of JSON files as a queue of torrents to be processed.`
+
 var rootCmd = &cobra.Command{
+	Short:         "Utility for processing completed torrents",
 	SilenceErrors: true, // we'll log errors on our own
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if cmd.Name() == "help" {
@@ -183,4 +190,5 @@ func getAppConfig(cmd *cobra.Command) (cfg config.App, err error) {
 func init() {
 	cobra.EnableCaseInsensitive = true
 	rootCmd.PersistentFlags().String("config", "", "Path to the config file to use.")
+	rootCmd.Long = rootCmd.Short + "\n" + longDescription
 }
