@@ -8,7 +8,7 @@ A file can be provided directly via the global `--config` option.
 
 If one is not provided, or a directory is specified, this will search for one named _tp.yaml_ ([other extensions/formats](https://pkg.go.dev/github.com/spf13/viper@v1.19.0#SupportedExts) may work but have not been tested) in the following directories in order:
 1. The `--config` option interpretted as a directory, if provided.
-2. In a _tp_ subdirectory in the user's OS-specific configuration directory (see [UserConfigDir](https://pkg.go.dev/os#UserConfigDir)).
+2. In a _TorrentProccessor_ subdirectory in the user's OS-specific configuration directory (see [UserConfigDir](https://pkg.go.dev/os#UserConfigDir)).
 3. In the user's OS-specific home directory (see [UserHomeDir](https://pkg.go.dev/os#UserHomeDir)).
 4. **🚧 experimental**: In the current working directory, if run via `go run .` from the root of the source directory.
 5. In the same directory as the executable.
@@ -36,4 +36,8 @@ Install an OS-specific executable in `$(go env GOPATH)/bin` named named _Torrent
 ```sh
 go install -v .
 ```
+
+## Processing Daemon
+
+To setup/install/start the processing daemon, run `TorrentProcessor process daemon start`. This will run as a GUI LaunchAgent, so it will start when the user logs in, and is triggered by files changing in the work directory.
 

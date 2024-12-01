@@ -141,7 +141,7 @@ func getAppConfig(cmd *cobra.Command) (cfg config.App, err error) {
 		}
 
 		if dir, err := os.UserConfigDir(); err == nil {
-			viper.AddConfigPath(filepath.Join(dir, "tp"))
+			viper.AddConfigPath(filepath.Join(dir, "TorrentProcessor"))
 		}
 
 		if dir, err := os.UserHomeDir(); err == nil {
