@@ -21,8 +21,6 @@ import (
 //go:embed daemon.plist.tmpl
 var plistTemplate string
 
-const debugLogName = "tp.debug.log"
-
 var daemonCmd = &cobra.Command{
 	Use:               "daemon",
 	Aliases:           []string{"service"},

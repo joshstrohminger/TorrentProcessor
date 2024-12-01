@@ -14,6 +14,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const debugLogName = "tp.debug.log"
+
 var logsCmd = &cobra.Command{
 	Use:               "logs",
 	Aliases:           []string{"log"},
