@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>{{.Info.Label}}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{{.Exe}}</string>
+        <string>process</string>
+    </array>
+{{- if .Info.DebugLogName }}
+    <key>StandardOutPath</key><string>{{.Config.LogPath}}/{{.Info.DebugLogName}}</string>
+    <key>StandardErrorPath</key><string>{{.Config.LogPath}}/{{.Info.DebugLogName}}</string>
+    <key>Debug</key><true/>
+{{- end}}
+    <key>WatchPaths</key>
+    <array>
+        <string>{{.Config.WorkPath}}</string>
+    </array>
+    <key>RunAtLoad</key><true/>
+</dict>
+</plist>

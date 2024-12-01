@@ -225,8 +225,6 @@ func init() {
 				}
 
 				rootCmd.Version = fmt.Sprintf("%s, from ref %s%s, committed %s", rootCmd.Version, revision, dirtyLabel, revisionTimeString)
-			} else {
-				fmt.Println(info.Settings)
 			}
 		}
 	}
