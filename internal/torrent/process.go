@@ -62,7 +62,7 @@ func (p *Processor) Process(ctx context.Context, entry Entry) (err error) {
 		return p.copyTvSeason(ctx, entry)
 	case Manual:
 		return ErrManualProcessing
-	case Ignore:
+	case Ignore, Seed:
 		return nil
 	default:
 		return fmt.Errorf("unhandled category %s", entry.Category)

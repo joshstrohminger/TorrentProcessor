@@ -9,6 +9,7 @@ const (
 	TvSeason
 	Manual
 	Ignore
+	Seed
 )
 
 var AllCategories []Category
