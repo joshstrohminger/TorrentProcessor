@@ -7,6 +7,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -128,6 +129,8 @@ var qBittorrentMigrateCmd = &cobra.Command{
 			return err
 		}
 
+		cmd.SilenceUsage = true
+
 		return convertFiles(qbConfig{
 			srcDir:        srcDir,
 			dstDir:        dstDir,
@@ -195,7 +198,10 @@ func convertFiles(cfg qbConfig) error {
 
 	var copied uint64
 
+	var num int
 	for _, pair := range pairs {
+		num++
+		fmt.Printf("Processing %d of %d: hash %s\n", num, len(pairs), pair.Hash)
 		if err := processPair(pair, cfg); err != nil {
 			return fmt.Errorf("failed to process pair for hash %s: %w", pair.Hash, err)
 		}
@@ -210,8 +216,6 @@ func convertFiles(cfg qbConfig) error {
 }
 
 func processPair(pair *qBittorrentPair, cfg qbConfig) error {
-	fmt.Println("Processing hash", pair.Hash)
-
 	if err := processFastResume(pair, cfg); err != nil {
 		return fmt.Errorf("fastresume: %w", err)
 	}
@@ -281,6 +285,8 @@ func copyFileOrDir(src string, dst string, dryRun bool, copied *uint64) error {
 	return nil
 }
 
+var invalidPathCharsRegex = regexp.MustCompile(`[<>:\\|?*"]`)
+
 func processTorrent(pair *qBittorrentPair, cfg qbConfig) error {
 	src := pair.TorrentPath
 	dst := filepath.Join(cfg.dstDir, filepath.Base(pair.TorrentPath))
@@ -315,10 +321,16 @@ func processTorrent(pair *qBittorrentPair, cfg qbConfig) error {
 		return fmt.Errorf("failed to read value: %w", err)
 	}
 
+	sanitizedName := invalidPathCharsRegex.ReplaceAllString(name, "_")
+	if sanitizedName != name {
+		fmt.Printf("Sanitized name from %s to %s\n", name, sanitizedName)
+	}
+	name = sanitizedName
+
 	src = filepath.Join(pair.PreviousSaveDir, name)
 	dst = filepath.Join(cfg.contentDstDir, name)
 	if err := copyFileOrDir(src, dst, cfg.dryRun, &pair.ContentSize); err != nil {
-		return fmt.Errorf("failed to copy data from %s to %s: %w", src, dst, err)
+		return fmt.Errorf("failed to copy content from %s to %s: %w", src, dst, err)
 	}
 
 	return nil
