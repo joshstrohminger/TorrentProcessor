@@ -144,6 +144,7 @@ type qBittorrentPair struct {
 	TorrentPath     string
 	FastResumePath  string
 	PreviousSaveDir string
+	ContentSize     uint64
 }
 
 type qbConfig struct {
@@ -192,10 +193,17 @@ func convertFiles(cfg qbConfig) error {
 		}
 	}
 
+	var copied uint64
+
 	for _, pair := range pairs {
 		if err := processPair(pair, cfg); err != nil {
 			return fmt.Errorf("failed to process pair for hash %s: %w", pair.Hash, err)
 		}
+		copied += pair.ContentSize
+	}
+
+	if cfg.contentDstDir != "" {
+		fmt.Printf("Copied %s of content\n", humanize.Bytes(copied))
 	}
 
 	return nil
@@ -215,7 +223,7 @@ func processPair(pair *qBittorrentPair, cfg qbConfig) error {
 	return nil
 }
 
-func copyFileOrDir(src string, dst string, dryRun bool) error {
+func copyFileOrDir(src string, dst string, dryRun bool, copied *uint64) error {
 	info, err := os.Stat(src)
 	if err != nil {
 		return fmt.Errorf("source doesn't exist: %s", src)
@@ -238,13 +246,15 @@ func copyFileOrDir(src string, dst string, dryRun bool) error {
 		for _, entry := range entries {
 			childSrc := filepath.Join(src, entry.Name())
 			childDst := filepath.Join(dst, entry.Name())
-			if err := copyFileOrDir(childSrc, childDst, dryRun); err != nil {
+			if err := copyFileOrDir(childSrc, childDst, dryRun, copied); err != nil {
 				return fmt.Errorf("failed to copy from %s to %s: %w", childSrc, childDst, err)
 			}
 		}
 
 		return nil
 	}
+
+	*copied += uint64(info.Size())
 
 	fmt.Printf("Copying %s from %s to %s\n", humanize.Bytes(uint64(info.Size())), src, dst)
 	if _, err := os.Stat(dst); err == nil {
@@ -274,7 +284,7 @@ func copyFileOrDir(src string, dst string, dryRun bool) error {
 func processTorrent(pair *qBittorrentPair, cfg qbConfig) error {
 	src := pair.TorrentPath
 	dst := filepath.Join(cfg.dstDir, filepath.Base(pair.TorrentPath))
-	if err := copyFileOrDir(src, dst, cfg.dryRun); err != nil {
+	if err := copyFileOrDir(src, dst, cfg.dryRun, &pair.ContentSize); err != nil {
 		return fmt.Errorf("failed to copy torrent from %s to %s: %w", src, dst, err)
 	}
 
@@ -307,7 +317,7 @@ func processTorrent(pair *qBittorrentPair, cfg qbConfig) error {
 
 	src = filepath.Join(pair.PreviousSaveDir, name)
 	dst = filepath.Join(cfg.contentDstDir, name)
-	if err := copyFileOrDir(src, dst, cfg.dryRun); err != nil {
+	if err := copyFileOrDir(src, dst, cfg.dryRun, &pair.ContentSize); err != nil {
 		return fmt.Errorf("failed to copy data from %s to %s: %w", src, dst, err)
 	}
 
