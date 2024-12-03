@@ -49,7 +49,7 @@ func (p *Processor) Process(ctx context.Context, entry Entry) (err error) {
 	start := time.Now()
 	defer func() {
 		if err == nil {
-			p.logger.LogAttrs(ctx, slog.LevelDebug, "Completed", slog.String("elapsed", time.Since(start).String()))
+			p.logger.LogAttrs(ctx, slog.LevelDebug, "Completed", slog.String("elapsed", time.Since(start).Round(time.Second).String()))
 		}
 	}()
 
