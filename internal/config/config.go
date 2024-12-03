@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"reflect"
 	"strings"
@@ -44,10 +45,13 @@ func (a App) Validate() error {
 	for i := 0; i < v.NumField(); i++ {
 		field := v.Field(i)
 		name := t.Field(i).Name
-		if field.Kind() == reflect.String && strings.HasSuffix(name, "Path") && !strings.HasSuffix(name, "OutputPath") {
+		if field.Kind() == reflect.String && strings.HasSuffix(name, "Path") {
 			path := field.String()
 			if _, err := os.Stat(path); err != nil {
-				errs = append(errs, fmt.Errorf("%s doesn't exist: %s", name, path))
+				// don't add errors for "OutputPath" fields that don't exist, but continue to Stat them to prompt for permissions if needed
+				if !errors.Is(err, fs.ErrNotExist) || !strings.HasSuffix(name, "OutputPath") {
+					errs = append(errs, fmt.Errorf("%s doesn't exist: %s", name, path))
+				}
 			}
 		}
 	}

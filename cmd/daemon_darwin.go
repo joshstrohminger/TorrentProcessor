@@ -26,6 +26,7 @@ var daemonCmd = &cobra.Command{
 	Aliases:           []string{"service"},
 	Short:             "Control the processing daemon",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error { return nil },
+	SilenceUsage:      true,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 		info, err := getDaemonInfo()
@@ -39,7 +40,7 @@ var daemonCmd = &cobra.Command{
 		summary = strings.ReplaceAll(summary, ":", ": ")
 		fmt.Println(summary)
 
-		return nil
+		return printWorkQueueCount(cmd)
 	},
 }
 
