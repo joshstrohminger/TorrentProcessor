@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/joshstrohminger/TorrentProcessor/internal/config"
+	"github.com/joshstrohminger/TorrentProcessor/internal/util"
 	"github.com/mitchellh/mapstructure"
 	slogmulti "github.com/samber/slog-multi"
 	"github.com/spf13/cobra"
@@ -112,17 +113,6 @@ func getOsLogDir() (dir string, err error) {
 	}
 }
 
-// isFileBelowDir checks if the file is contained withing dir or one of its child directories.
-func isFileBelowDir(file string, dir string) (bool, error) {
-	relPath, err := filepath.Rel(dir, file)
-	if err != nil {
-		return false, err
-	}
-
-	// Check if the relative path starts with "..", meaning it's not within the parent directory
-	return !strings.HasPrefix(relPath, ".."), nil
-}
-
 func getAppConfig(cmd *cobra.Command) (cfg config.App, err error) {
 	configPath, err := cmd.Flags().GetString("config")
 	if err != nil {
@@ -151,7 +141,7 @@ func getAppConfig(cmd *cobra.Command) (cfg config.App, err error) {
 		if exe, err := os.Executable(); err == nil {
 			dir := filepath.Dir(exe)
 
-			if inTemp, err := isFileBelowDir(exe, os.TempDir()); inTemp {
+			if inTemp, err := util.IsFileBelowDir(exe, os.TempDir()); inTemp {
 				// assume we've been run using "go run" and might have a config file local to the working directory
 				viper.AddConfigPath(".")
 			} else if err != nil {

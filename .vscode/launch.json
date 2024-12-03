@@ -35,6 +35,14 @@
             "mode": "auto",
             "program": "${workspaceFolder}",
             "args": ["logs", "summarize"]
+        },
+        {
+            "name": "Prune (no)",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": ["qbittorrent", "prune", "-n"]
         }
     ]
 }
