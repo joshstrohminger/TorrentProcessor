@@ -14,24 +14,29 @@ var statusCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error { return nil },
 
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return printWorkQueueCount(cmd)
+		count, err := countQueued(cmd)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("Queued:", count)
+
+		return nil
 	},
 }
 
-func printWorkQueueCount(cmd *cobra.Command) error {
+func countQueued(cmd *cobra.Command) (int, error) {
 	appCfg, err := getAppConfig(cmd)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	entries, err := os.ReadDir(appCfg.WorkPath)
 	if err != nil {
-		return fmt.Errorf("failed to read from work path %s: %w", appCfg.WorkPath, err)
+		return 0, fmt.Errorf("failed to read from work path %s: %w", appCfg.WorkPath, err)
 	}
 
-	fmt.Println("Queued:", len(entries))
-
-	return nil
+	return len(entries), nil
 }
 
 func init() {

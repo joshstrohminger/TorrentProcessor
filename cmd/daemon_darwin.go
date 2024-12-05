@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"text/template"
 
 	"github.com/joshstrohminger/TorrentProcessor/internal/config"
+	"github.com/joshstrohminger/TorrentProcessor/internal/util/term"
 	"github.com/spf13/cobra"
 )
 
@@ -34,22 +36,50 @@ var daemonCmd = &cobra.Command{
 			return err
 		}
 
-		summary := fmt.Sprintf("%+v", info)
-		summary = strings.Trim(summary, "{}")
-		summary = strings.ReplaceAll(summary, " ", "\n")
-		summary = strings.ReplaceAll(summary, ":", ": ")
-		fmt.Println(summary)
+		info.Queued, err = countQueued(cmd)
+		if err != nil {
+			return err
+		}
 
-		return printWorkQueueCount(cmd)
+		term.PrintStruct(info)
+		return nil
+	},
+}
+
+var daemonRunCmd = &cobra.Command{
+	Use:     "run",
+	Aliases: []string{"trigger", "kickstart"},
+	Short:   "Run the daemon now",
+	Long:    "Manually trigger the daemon to run now",
+
+	RunE: func(cmd *cobra.Command, args []string) error {
+		info, err := getDaemonInfo()
+		if err != nil {
+			return err
+		}
+
+		if !info.Installed {
+			return fmt.Errorf("daemon is not installed")
+		}
+
+		out, err := exec.Command("launchctl", "kickstart", info.Name).CombinedOutput()
+		if err != nil {
+			out = bytes.TrimSpace(out)
+			if len(out) != 0 {
+				return fmt.Errorf("failed to kickstart daemon: %s: %w", string(bytes.TrimSpace(out)), err)
+			}
+			return fmt.Errorf("failed to kickstart daemon: %w", err)
+		}
+
+		return nil
 	},
 }
 
 var daemonStartCmd = &cobra.Command{
-	Use:               "start",
-	Aliases:           []string{"install", "load", "bootstrap"},
-	Short:             "Install and bootstrap (start) the daemon",
-	SilenceUsage:      true,
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error { return nil },
+	Use:          "start",
+	Aliases:      []string{"install", "load", "bootstrap"},
+	Short:        "Install and bootstrap (start) the daemon",
+	SilenceUsage: true,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 
@@ -104,11 +134,10 @@ var daemonStartCmd = &cobra.Command{
 }
 
 var daemonStopCmd = &cobra.Command{
-	Use:               "stop",
-	Aliases:           []string{"remove", "unload", "bootout"},
-	Short:             "Disable and remove the daemon",
-	SilenceUsage:      true,
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error { return nil },
+	Use:          "stop",
+	Aliases:      []string{"remove", "unload", "bootout"},
+	Short:        "Disable and remove the daemon",
+	SilenceUsage: true,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 		info, err := getDaemonInfo()
@@ -172,35 +201,48 @@ type DaemonInfo struct {
 	Name         string
 	Path         string
 	DebugLogName string
+	Conflict     bool
 	Installed    bool
 	Enabled      bool
 	Running      bool
+	Queued       int
 }
 
-func getDaemonInfo() (info DaemonInfo, err error) {
+func getDaemonInfo() (DaemonInfo, error) {
+	var info DaemonInfo
+	var err error
+
 	info.Label, err = getDaemonLabel()
 	if err != nil {
-		return
+		return info, err
 	}
 
-	var home string
-	home, err = os.UserHomeDir()
+	home, err := os.UserHomeDir()
 	if err != nil {
-		err = fmt.Errorf("failed to get user home directory: %w", err)
-		return
+		return info, fmt.Errorf("failed to get user home directory: %w", err)
 	}
 
 	info.Path = filepath.Join(home, "Library", "LaunchAgents", info.Label+".plist")
 	if _, err = os.Stat(info.Path); err == nil {
 		info.Installed = true
 	} else if !errors.Is(err, fs.ErrNotExist) {
-		return
+		// check if something with the same name is installed
+		out, err := exec.Command("launchctl", "list").CombinedOutput()
+		if err != nil {
+			return info, fmt.Errorf("failed to list existing daemons: %w", err)
+		}
+
+		info.Conflict, err = regexp.Match(`\s`+info.Label+`(\s|$)`, out)
+		if err != nil {
+			return info, fmt.Errorf("failed to check for existing daemons: %w", err)
+		}
+
+		return info, nil
 	}
 
-	var id string
-	id, err = getUserId()
+	id, err := getUserId()
 	if err != nil {
-		return
+		return info, err
 	}
 	info.Domain = fmt.Sprintf("gui/%s", id)
 	info.Name = fmt.Sprintf("%s/%s", info.Domain, info.Label)
@@ -208,11 +250,11 @@ func getDaemonInfo() (info DaemonInfo, err error) {
 	if info.Installed {
 		info.Enabled, info.Running, err = getDaemonStatus(info.Name)
 		if err != nil {
-			return
+			return info, err
 		}
 	}
 
-	return
+	return info, nil
 }
 
 func getDaemonStatus(name string) (enabled bool, running bool, err error) {
@@ -290,7 +332,7 @@ func getDaemonLabel() (string, error) {
 
 func init() {
 	processCmd.AddCommand(daemonCmd)
-	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd)
+	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonRunCmd)
 
 	daemonStartCmd.Flags().Bool("force", false, "Force re-installation if it already exists")
 	daemonStartCmd.Flags().Bool("debug", false, fmt.Sprintf("Enable additional launchd logging and write stdout and stderr to %s in the configured log directory", debugLogName))
