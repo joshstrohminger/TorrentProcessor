@@ -2,26 +2,15 @@ package cmd
 
 import (
 	"bytes"
-	_ "embed"
-	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"regexp"
-	"runtime/debug"
-	"slices"
 	"strings"
-	"text/template"
 
-	"github.com/joshstrohminger/TorrentProcessor/internal/config"
+	"github.com/joshstrohminger/TorrentProcessor/internal/daemon"
 	"github.com/joshstrohminger/TorrentProcessor/internal/util/term"
 	"github.com/spf13/cobra"
 )
-
-//go:embed daemon.plist.tmpl
-var plistTemplate string
 
 var daemonCmd = &cobra.Command{
 	Use:               "daemon",
@@ -31,7 +20,12 @@ var daemonCmd = &cobra.Command{
 	SilenceUsage:      true,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
-		info, err := getDaemonInfo()
+		exitCode, err := cmd.Flags().GetBool("exit-code")
+		if err != nil {
+			return err
+		}
+
+		info, err := daemon.GetInfo()
 		if err != nil {
 			return err
 		}
@@ -42,6 +36,11 @@ var daemonCmd = &cobra.Command{
 		}
 
 		term.PrintStruct(info)
+
+		if exitCode && info.Running {
+			os.Exit(1)
+		}
+
 		return nil
 	},
 }
@@ -53,7 +52,7 @@ var daemonRunCmd = &cobra.Command{
 	Long:    "Manually trigger the daemon to run now",
 
 	RunE: func(cmd *cobra.Command, args []string) error {
-		info, err := getDaemonInfo()
+		info, err := daemon.GetInfo()
 		if err != nil {
 			return err
 		}
@@ -88,7 +87,7 @@ var daemonStartCmd = &cobra.Command{
 			return err
 		}
 
-		info, err := getDaemonInfo()
+		info, err := daemon.GetInfo()
 		if err != nil {
 			return err
 		}
@@ -109,7 +108,7 @@ var daemonStartCmd = &cobra.Command{
 
 		if info.Installed {
 			fmt.Println("Daemon is already installed at", info.Path)
-		} else if err := installPlist(info, cfg); err != nil {
+		} else if err := daemon.InstallPlist(info, cfg); err != nil {
 			return fmt.Errorf("failed to install daemon: %w", err)
 		} else {
 			fmt.Println("Daemon installed at", info.Path)
@@ -140,7 +139,7 @@ var daemonStopCmd = &cobra.Command{
 	SilenceUsage: true,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
-		info, err := getDaemonInfo()
+		info, err := daemon.GetInfo()
 		if err != nil {
 			return err
 		}
@@ -165,174 +164,11 @@ var daemonStopCmd = &cobra.Command{
 	},
 }
 
-func installPlist(info DaemonInfo, cfg config.App) error {
-	exe, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("failed to get executable path: %w", err)
-	}
-
-	tmpl, err := template.New("plist").Parse(plistTemplate)
-	if err != nil {
-		return fmt.Errorf("failed to parse plist template: %w", err)
-	}
-
-	file, err := os.OpenFile(info.Path, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to open %s for write: %w", info.Path, err)
-	}
-	defer file.Close()
-
-	if err = tmpl.Execute(file, TemplateData{exe, info, cfg}); err != nil {
-		return fmt.Errorf("failed to execute plist template: %w", err)
-	}
-
-	return nil
-}
-
-type TemplateData struct {
-	Exe    string
-	Info   DaemonInfo
-	Config config.App
-}
-
-type DaemonInfo struct {
-	Label        string
-	Domain       string
-	Name         string
-	Path         string
-	DebugLogName string
-	Conflict     bool
-	Installed    bool
-	Enabled      bool
-	Running      bool
-	Queued       int
-}
-
-func getDaemonInfo() (DaemonInfo, error) {
-	var info DaemonInfo
-	var err error
-
-	info.Label, err = getDaemonLabel()
-	if err != nil {
-		return info, err
-	}
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return info, fmt.Errorf("failed to get user home directory: %w", err)
-	}
-
-	info.Path = filepath.Join(home, "Library", "LaunchAgents", info.Label+".plist")
-	if _, err = os.Stat(info.Path); err == nil {
-		info.Installed = true
-	} else if !errors.Is(err, fs.ErrNotExist) {
-		// check if something with the same name is installed
-		out, err := exec.Command("launchctl", "list").CombinedOutput()
-		if err != nil {
-			return info, fmt.Errorf("failed to list existing daemons: %w", err)
-		}
-
-		info.Conflict, err = regexp.Match(`\s`+info.Label+`(\s|$)`, out)
-		if err != nil {
-			return info, fmt.Errorf("failed to check for existing daemons: %w", err)
-		}
-
-		return info, nil
-	}
-
-	id, err := getUserId()
-	if err != nil {
-		return info, err
-	}
-	info.Domain = fmt.Sprintf("gui/%s", id)
-	info.Name = fmt.Sprintf("%s/%s", info.Domain, info.Label)
-
-	if info.Installed {
-		info.Enabled, info.Running, err = getDaemonStatus(info.Name)
-		if err != nil {
-			return info, err
-		}
-	}
-
-	return info, nil
-}
-
-func getDaemonStatus(name string) (enabled bool, running bool, err error) {
-	out, err := exec.Command("launchctl", "print", name).CombinedOutput()
-	if err != nil {
-		if exitError, ok := err.(*exec.ExitError); ok && exitError.ExitCode() == 113 {
-			// not enabled
-			err = nil
-			return
-		}
-
-		err = fmt.Errorf("failed to get daemon %s status: %w", name, err)
-		return
-	}
-
-	enabled = true
-
-	reg, err := regexp.Compile(`\sstate = ((:?not )?running)\s`)
-	if err != nil {
-		err = fmt.Errorf("failed to get daemon %s status: failed to compile regex: %w", name, err)
-		return
-	}
-
-	output := string(out)
-	matches := reg.FindStringSubmatch(output)
-	if matches == nil {
-		err = fmt.Errorf("failed to find state for daemon %s", name)
-		return
-	}
-	state := matches[1]
-
-	switch state {
-	case "running":
-		running = true
-	case "not running":
-	default:
-		err = fmt.Errorf("unhandled state in daemon %s: %s", name, state)
-		return
-	}
-
-	return
-}
-
-func getUserId() (string, error) {
-	// lookup the user name in case we're running as sudo
-	user, ok := os.LookupEnv("SUDO_USER")
-	if !ok {
-		user, ok = os.LookupEnv("USER")
-		if !ok {
-			return "", fmt.Errorf("failed to lookup current user via environment variables")
-		}
-	}
-
-	out, err := exec.Command("id", "-u", user).CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("failed to get user ID: %w", err)
-	}
-	return strings.TrimSpace(string(out)), nil
-}
-
-func getDaemonLabel() (string, error) {
-	info, ok := debug.ReadBuildInfo()
-	if !ok {
-		return "", fmt.Errorf("failed to get daemon label: failed to get build info")
-	}
-
-	parts := strings.Split(info.Path, "/")
-
-	domainParts := strings.Split(parts[0], ".")
-	slices.Reverse(domainParts)
-	parts[0] = strings.Join(domainParts, ".")
-
-	return strings.Join(parts, "."), nil
-}
-
 func init() {
 	processCmd.AddCommand(daemonCmd)
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonRunCmd)
+
+	daemonCmd.Flags().Bool("exit-code", false, "Set the exit code to 0 if not running, 1 if running")
 
 	daemonStartCmd.Flags().Bool("force", false, "Force re-installation if it already exists")
 	daemonStartCmd.Flags().Bool("debug", false, fmt.Sprintf("Enable additional launchd logging and write stdout and stderr to %s in the configured log directory", debugLogName))
