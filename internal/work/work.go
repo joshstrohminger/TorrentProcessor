@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 
+	"github.com/joshstrohminger/TorrentProcessor/internal/app"
 	"github.com/joshstrohminger/TorrentProcessor/internal/torrent"
 	"golang.org/x/exp/maps"
 )
@@ -63,11 +64,17 @@ func (w *Work) Next(ignore bool) (*torrent.Entry, error) {
 	// find the oldest unprocessed file in the directory
 	var file fs.FileInfo
 	for _, entry := range entries {
-		if !entry.IsDir() && filepath.Ext(entry.Name()) == w.fileFormat.Ext() {
-			if info, err := entry.Info(); err != nil {
-				return nil, fmt.Errorf("failed to get entry info: %w", err)
-			} else if _, exists := w.ignored[entry.Name()]; !exists && (file == nil || info.ModTime().Before(file.ModTime())) {
-				file = info
+		if !entry.IsDir() {
+			if entry.Name() == app.SetupTriggerName {
+				return nil, ErrSetupTriggerFound{filepath.Join(w.dir, entry.Name())}
+			}
+
+			if filepath.Ext(entry.Name()) == w.fileFormat.Ext() {
+				if info, err := entry.Info(); err != nil {
+					return nil, fmt.Errorf("failed to get entry info: %w", err)
+				} else if _, exists := w.ignored[entry.Name()]; !exists && (file == nil || info.ModTime().Before(file.ModTime())) {
+					file = info
+				}
 			}
 		}
 	}

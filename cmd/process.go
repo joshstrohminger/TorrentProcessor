@@ -83,6 +83,7 @@ func processWork(ctx context.Context, w *work.Work, cfg config.Process) error {
 		if entry, err := w.Next(cfg.MaxRetries >= 0 && retries >= cfg.MaxRetries); err != nil {
 			var errParse work.ErrParse
 			var errIgnored work.ErrIgnored
+			var errSetupTriggerFound work.ErrSetupTriggerFound
 
 			if errors.As(err, &errParse) {
 				if cfg.MaxRetries < 0 || retries < cfg.MaxRetries {
@@ -105,6 +106,14 @@ func processWork(ctx context.Context, w *work.Work, cfg config.Process) error {
 				err = fmt.Errorf("exceeded %d retries: %w", cfg.MaxRetries, err)
 			} else if errors.As(err, &errIgnored) {
 				// go to the next loop iteration, no need for a delay when ignoring a repeatedly failed entry
+				continue
+			} else if errors.As(err, &errSetupTriggerFound) {
+				if err := writeToAllPaths(cfg.App, false); err != nil {
+					return fmt.Errorf("failed to trigger permission requests", slog.Any("error", err))
+				}
+				if err := os.Remove(errSetupTriggerFound.Filepath); err != nil {
+					return fmt.Errorf("failed to trigger permission requests", slog.Any("error", err))
+				}
 				continue
 			}
 			return fmt.Errorf("failed to get next work entry: %w", err)

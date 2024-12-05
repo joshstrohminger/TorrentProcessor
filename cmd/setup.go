@@ -23,6 +23,11 @@ var setupCmd = &cobra.Command{
 	SilenceUsage:      true,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
+		queue, err := cmd.Flags().GetBool("queue")
+		if err != nil {
+			return err
+		}
+
 		appCfg, err := setupAppConfig(cmd)
 		if err != nil {
 			return err
@@ -30,28 +35,40 @@ var setupCmd = &cobra.Command{
 
 		fmt.Println("Setup is valid:", viper.ConfigFileUsed())
 
-		if err := appCfg.VisitPaths(func(name, dir string) error {
-			path := filepath.Join(dir, "."+app.ShortName)
-			file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND, 0666)
-			if err != nil {
-				return fmt.Errorf("failed to create file %s: %w", path, err)
-			}
-			if err := file.Close(); err != nil {
-				return fmt.Errorf("failed to close file %s: %w", path, err)
-			}
-
-			if err := os.Remove(path); err != nil {
-				return fmt.Errorf("failed to remove file %s: %w", path, err)
-			}
-			return nil
-		}); err != nil {
-			return fmt.Errorf("failed to trigger permissions requests: %w", err)
+		if err := writeToAllPaths(appCfg, queue); err != nil {
+			return err
 		}
 
 		fmt.Println("All directories are accessible")
 
 		return nil
 	},
+}
+
+func writeToAllPaths(appCfg config.App, queue bool) error {
+	if err := appCfg.VisitPaths(func(name, dir string) error {
+		path := filepath.Join(dir, app.SetupTriggerName)
+
+		file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND, 0666)
+		if err != nil {
+			return fmt.Errorf("failed to create file %s: %w", path, err)
+		}
+		if err := file.Close(); err != nil {
+			return fmt.Errorf("failed to close file %s: %w", path, err)
+		}
+
+		// don't remove the file for the workpath if we need to queue setup to run again
+		if !queue || dir != appCfg.WorkPath {
+			if err := os.Remove(path); err != nil {
+				return fmt.Errorf("failed to remove file %s: %w", path, err)
+			}
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("failed to trigger permissions requests: %w", err)
+	}
+
+	return nil
 }
 
 func setupAppConfig(cmd *cobra.Command) (config.App, error) {
@@ -120,4 +137,5 @@ func setupAppConfig(cmd *cobra.Command) (config.App, error) {
 
 func init() {
 	rootCmd.AddCommand(setupCmd)
+	setupCmd.Flags().Bool("queue", false, "Queue setup again the next time the 'process' command runs")
 }
