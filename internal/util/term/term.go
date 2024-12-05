@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"reflect"
 	"strings"
 
@@ -58,4 +59,18 @@ func PrintStruct(s any) {
 	for _, item := range items {
 		fmt.Printf("%*s %s\n", -maxLen, item[0], item[1])
 	}
+}
+
+func GetEditor() string {
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = os.Getenv("VISUAL")
+	}
+	if editor == "" {
+		editor, _ = exec.LookPath("vim")
+	}
+	if editor == "" {
+		editor, _ = exec.LookPath("vi")
+	}
+	return editor
 }

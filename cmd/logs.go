@@ -11,10 +11,12 @@ import (
 	"slices"
 	"time"
 
+	"github.com/joshstrohminger/TorrentProcessor/internal/app"
 	"github.com/spf13/cobra"
 )
 
-const debugLogName = "tp.debug.log"
+const logNameFormat = app.ShortName + ".%s.log"
+const debugLogName = app.ShortName + ".debug.log"
 
 var logsCmd = &cobra.Command{
 	Use:               "logs",

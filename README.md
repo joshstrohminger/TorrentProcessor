@@ -34,7 +34,7 @@ go run . logs --help
 Install an OS-specific executable in `$(go env GOPATH)/bin` named named _TorrentProcessor_ (with a _.exe_ extension in Windows).
 
 ```sh
-go install -v .
+./install.sh
 ```
 
 ## Processing Daemon

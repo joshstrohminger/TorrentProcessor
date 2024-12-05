@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/joshstrohminger/TorrentProcessor/internal/app"
 	"github.com/joshstrohminger/TorrentProcessor/internal/config"
 	"github.com/joshstrohminger/TorrentProcessor/internal/util"
 	"github.com/mitchellh/mapstructure"
@@ -22,8 +23,6 @@ import (
 )
 
 var logger *slog.Logger
-
-const logNameFormat = "tp.%s.log"
 
 //go:embed .version
 var version string
@@ -113,25 +112,42 @@ func getOsLogDir() (dir string, err error) {
 	}
 }
 
-func getAppConfig(cmd *cobra.Command) (cfg config.App, err error) {
+func getUserAppCfgDir() (string, error) {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get user config dir: %w", err)
+	}
+	return filepath.Join(dir, app.LongName), nil
+}
+
+func getAppConfig(cmd *cobra.Command) (config.App, error) {
+	cfg := config.App{
+		MaxRetries:    5,
+		DormantPeriod: time.Minute,
+		Api: config.Api{
+			Host: "localhost",
+			Port: 8080,
+		},
+	}
+
 	configPath, err := cmd.Flags().GetString("config")
 	if err != nil {
-		return
+		return cfg, err
 	}
 
 	if slices.Contains(viper.SupportedExts, strings.ToLower(strings.TrimPrefix(filepath.Ext(configPath), "."))) {
 		// file path provided, use it directly
 		viper.SetConfigFile(configPath)
 	} else {
-		viper.SetConfigName("tp")
+		viper.SetConfigName(app.ShortName)
 
 		if configPath != "" {
 			// directory provided, search there first
 			viper.AddConfigPath(configPath)
 		}
 
-		if dir, err := os.UserConfigDir(); err == nil {
-			viper.AddConfigPath(filepath.Join(dir, "TorrentProcessor"))
+		if dir, err := getUserAppCfgDir(); err == nil {
+			viper.AddConfigPath(dir)
 		}
 
 		if dir, err := os.UserHomeDir(); err == nil {
@@ -145,7 +161,7 @@ func getAppConfig(cmd *cobra.Command) (cfg config.App, err error) {
 				// assume we've been run using "go run" and might have a config file local to the working directory
 				viper.AddConfigPath(".")
 			} else if err != nil {
-				return config.App{}, fmt.Errorf("failed to check if running from the temp dir: %w", err)
+				return cfg, fmt.Errorf("failed to check if running from the temp dir: %w", err)
 			}
 
 			viper.AddConfigPath(dir)
@@ -154,33 +170,36 @@ func getAppConfig(cmd *cobra.Command) (cfg config.App, err error) {
 
 	viper.AutomaticEnv()
 	viper.EnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
-	viper.SetEnvPrefix("TP")
+	viper.SetEnvPrefix(strings.ToUpper(app.ShortName))
 
 	if err = viper.ReadInConfig(); err != nil {
-		err = fmt.Errorf("failed to read config file %s: %w", configPath, err)
-		return
+		return cfg, fmt.Errorf("failed to read config file %s: %w", configPath, err)
 	}
 
 	if err = viper.Unmarshal(&cfg, func(decoderConfig *mapstructure.DecoderConfig) {
 		decoderConfig.ErrorUnused = true
 	}); err != nil {
-		err = fmt.Errorf("failed to unmarshal config: %w", err)
-		return
+		return cfg, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
 	if cfg.LogPath == "" {
 		cfg.LogPath, err = getOsLogDir()
 		if err != nil {
-			return
+			return cfg, err
+		}
+	}
+
+	if cfg.WorkPath == "" {
+		if dir, err := getUserAppCfgDir(); err == nil {
+			cfg.WorkPath = filepath.Join(dir, "Work")
 		}
 	}
 
 	if err = cfg.Validate(); err != nil {
-		err = fmt.Errorf("invalid app config: %w", err)
-		return
+		return cfg, fmt.Errorf("invalid app config: %w", err)
 	}
 
-	return
+	return cfg, nil
 }
 
 func init() {

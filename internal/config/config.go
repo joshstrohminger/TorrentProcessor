@@ -8,7 +8,11 @@ import (
 	"reflect"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
+
+const Ext = ".yaml"
 
 type App struct {
 	WorkPath        string        `yaml:"workPath"`
@@ -18,6 +22,10 @@ type App struct {
 	DormantPeriod   time.Duration `yaml:"dormantPeriod"`
 	MaxRetries      int           `yaml:"maxRetries"`
 	Api             Api           `yaml:"api"`
+}
+
+func (cfg App) Marshal() ([]byte, error) {
+	return yaml.Marshal(cfg)
 }
 
 type Api struct {
@@ -40,21 +48,35 @@ type Process struct {
 func (a App) Validate() error {
 	var errs []error
 
+	_ = a.VisitPaths(func(name, path string) error {
+		if _, err := os.Stat(path); err != nil {
+			// don't add errors for "OutputPath" fields that don't exist, but continue to Stat them to prompt for permissions if needed
+			if !errors.Is(err, fs.ErrNotExist) || !strings.HasSuffix(name, "OutputPath") {
+				errs = append(errs, fmt.Errorf("%s doesn't exist: %s", name, path))
+			}
+		}
+		return nil
+	})
+
+	return errors.Join(errs...)
+}
+
+// VisitorFunc will be called with the field name and the path value for that field. Return an error to end early with that error.
+type VisitorFunc func(name string, path string) error
+
+func (a App) VisitPaths(f VisitorFunc) error {
 	v := reflect.ValueOf(a)
 	t := v.Type()
+
 	for i := 0; i < v.NumField(); i++ {
 		field := v.Field(i)
 		name := t.Field(i).Name
 		if field.Kind() == reflect.String && strings.HasSuffix(name, "Path") {
-			path := field.String()
-			if _, err := os.Stat(path); err != nil {
-				// don't add errors for "OutputPath" fields that don't exist, but continue to Stat them to prompt for permissions if needed
-				if !errors.Is(err, fs.ErrNotExist) || !strings.HasSuffix(name, "OutputPath") {
-					errs = append(errs, fmt.Errorf("%s doesn't exist: %s", name, path))
-				}
+			if err := f(name, field.String()); err != nil {
+				return err
 			}
 		}
 	}
 
-	return errors.Join(errs...)
+	return nil
 }
