@@ -1,6 +1,7 @@
 # torrent processor config file
 
 workPath: ".test/work"
+contentPath: ".test/content"
 movieOutputPath: ".test/movies"
 tvOutputPath: ".test/tv"
 maxRetries: 5

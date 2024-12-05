@@ -18,6 +18,7 @@ type App struct {
 	WorkPath        string        `yaml:"workPath"`
 	MovieOutputPath string        `yaml:"movieOutputPath"`
 	TvOutputPath    string        `yaml:"tvOutputPath"`
+	ContentPath     string        `yaml:"contentPath"`
 	LogPath         string        `yaml:"logPath"`
 	DormantPeriod   time.Duration `yaml:"dormantPeriod"`
 	MaxRetries      int           `yaml:"maxRetries"`

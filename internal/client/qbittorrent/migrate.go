@@ -43,12 +43,17 @@ func Migrate(cfg Config) error {
 	}
 
 	var copied uint64
+	var buffer []byte
+	if !cfg.DryRun {
+		// reuse a larger buffer to speed up file copying
+		buffer = make([]byte, 10*1024*1024)
+	}
 
 	var num int
 	for _, pair := range pairs {
 		num++
 		fmt.Printf("Processing %d of %d: hash %s\n", num, len(pairs), pair.Hash)
-		if err := processPair(pair, cfg); err != nil {
+		if err := processPair(pair, cfg, buffer); err != nil {
 			return fmt.Errorf("failed to process pair for hash %s: %w", pair.Hash, err)
 		}
 		copied += pair.ContentSize
@@ -61,19 +66,19 @@ func Migrate(cfg Config) error {
 	return nil
 }
 
-func processPair(pair *qBittorrentPair, cfg Config) error {
+func processPair(pair *qBittorrentPair, cfg Config, buffer []byte) error {
 	if err := processFastResume(pair, cfg); err != nil {
 		return fmt.Errorf("fastresume: %w", err)
 	}
 
-	if err := processTorrent(pair, cfg); err != nil {
+	if err := processTorrent(pair, cfg, buffer); err != nil {
 		return fmt.Errorf("torrent: %w", err)
 	}
 
 	return nil
 }
 
-func copyFileOrDir(src string, dst string, dryRun bool, copied *uint64) error {
+func copyFileOrDir(src string, dst string, dryRun bool, copied *uint64, buffer []byte) error {
 	info, err := os.Stat(src)
 	if err != nil {
 		return fmt.Errorf("source doesn't exist: %s", src)
@@ -96,7 +101,7 @@ func copyFileOrDir(src string, dst string, dryRun bool, copied *uint64) error {
 		for _, entry := range entries {
 			childSrc := filepath.Join(src, entry.Name())
 			childDst := filepath.Join(dst, entry.Name())
-			if err := copyFileOrDir(childSrc, childDst, dryRun, copied); err != nil {
+			if err := copyFileOrDir(childSrc, childDst, dryRun, copied, buffer); err != nil {
 				return fmt.Errorf("failed to copy from %s to %s: %w", childSrc, childDst, err)
 			}
 		}
@@ -123,7 +128,7 @@ func copyFileOrDir(src string, dst string, dryRun bool, copied *uint64) error {
 			return fmt.Errorf("failed to open source file %s: %w", src, err)
 		}
 
-		if _, err = io.Copy(out, in); err != nil {
+		if _, err = io.CopyBuffer(out, in, buffer); err != nil {
 			return fmt.Errorf("failed to copy file from %s to %s: %w", src, dst, err)
 		}
 	}
@@ -133,10 +138,10 @@ func copyFileOrDir(src string, dst string, dryRun bool, copied *uint64) error {
 
 var invalidPathCharsRegex = regexp.MustCompile(`[<>:\\|?*"]`)
 
-func processTorrent(pair *qBittorrentPair, cfg Config) error {
+func processTorrent(pair *qBittorrentPair, cfg Config, buffer []byte) error {
 	src := pair.TorrentPath
 	dst := filepath.Join(cfg.DstDir, filepath.Base(pair.TorrentPath))
-	if err := copyFileOrDir(src, dst, cfg.DryRun, &pair.ContentSize); err != nil {
+	if err := copyFileOrDir(src, dst, cfg.DryRun, &pair.ContentSize, buffer); err != nil {
 		return fmt.Errorf("failed to copy torrent from %s to %s: %w", src, dst, err)
 	}
 
@@ -150,7 +155,7 @@ func processTorrent(pair *qBittorrentPair, cfg Config) error {
 
 	src = pair.PreviousContentPath
 	dst = filepath.Join(cfg.ContentDstDir, filepath.Base(src))
-	if err := copyFileOrDir(src, dst, cfg.DryRun, &pair.ContentSize); err != nil {
+	if err := copyFileOrDir(src, dst, cfg.DryRun, &pair.ContentSize, buffer); err != nil {
 		return fmt.Errorf("failed to copy content from %s to %s: %w", src, dst, err)
 	}
 

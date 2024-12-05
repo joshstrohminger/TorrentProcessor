@@ -137,7 +137,7 @@ func (p *Processor) copyFile(src string, dst string) error {
 	if !p.cfg.DryRun {
 		out, err := os.Create(dst)
 		if err != nil {
-			return fmt.Errorf("failed to create destinaion file %s: %w", dst, err)
+			return fmt.Errorf("failed to create destination file %s: %w", dst, err)
 		}
 
 		in, err := os.Open(src)
@@ -145,7 +145,13 @@ func (p *Processor) copyFile(src string, dst string) error {
 			return fmt.Errorf("failed to open source file %s: %w", src, err)
 		}
 
-		if _, err = io.Copy(out, in); err != nil {
+		var buffer []byte
+		const bufferSize = 10 * 1024 * 1024
+		if size > bufferSize {
+			buffer = make([]byte, bufferSize)
+		}
+
+		if _, err = io.CopyBuffer(out, in, buffer); err != nil {
 			return fmt.Errorf("failed to copy file from %s to %s: %w", src, dst, err)
 		}
 	}

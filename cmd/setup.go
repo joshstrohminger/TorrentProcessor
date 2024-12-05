@@ -45,6 +45,8 @@ var setupCmd = &cobra.Command{
 	},
 }
 
+// TODO this won't take care of permissions associated with torrent content paths since we don't know what any of those are
+// perhaps we should also define the default content path to ensure we have access to it
 func writeToAllPaths(appCfg config.App, queue bool) error {
 	if err := appCfg.VisitPaths(func(name, dir string) error {
 		path := filepath.Join(dir, app.SetupTriggerName)

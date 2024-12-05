@@ -109,10 +109,7 @@ func processWork(ctx context.Context, w *work.Work, cfg config.Process) error {
 				continue
 			} else if errors.As(err, &errSetupTriggerFound) {
 				if err := writeToAllPaths(cfg.App, false); err != nil {
-					return fmt.Errorf("failed to trigger permission requests", slog.Any("error", err))
-				}
-				if err := os.Remove(errSetupTriggerFound.Filepath); err != nil {
-					return fmt.Errorf("failed to trigger permission requests", slog.Any("error", err))
+					return fmt.Errorf("failed to trigger permission requests: %w", err)
 				}
 				continue
 			}
