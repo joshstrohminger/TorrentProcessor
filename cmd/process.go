@@ -45,6 +45,22 @@ var processCmd = &cobra.Command{
 			}
 			ctx, cancel := signal.NotifyContext(cmd.Context(), os.Interrupt)
 			defer cancel()
+
+			flagPath := getSetupFlagPath()
+			if _, err := os.Stat(flagPath); err == nil {
+				logger.Debug("Found setup flag file")
+
+				if err := writeToAllPaths(appCfg); err != nil {
+					return err
+				}
+
+				if err := os.Remove(flagPath); err == nil {
+					return fmt.Errorf("failed to remove setup flag file %s: %w", flagPath, err)
+				}
+
+				logger.Debug("Removed setup flag file")
+			}
+
 			if err := processWork(ctx, work, cfg); err != nil {
 				return fmt.Errorf("failed to process work: %w", err)
 			}
@@ -83,7 +99,6 @@ func processWork(ctx context.Context, w *work.Work, cfg config.Process) error {
 		if entry, err := w.Next(cfg.MaxRetries >= 0 && retries >= cfg.MaxRetries); err != nil {
 			var errParse work.ErrParse
 			var errIgnored work.ErrIgnored
-			var errSetupTriggerFound work.ErrSetupTriggerFound
 
 			if errors.As(err, &errParse) {
 				if cfg.MaxRetries < 0 || retries < cfg.MaxRetries {
@@ -106,11 +121,6 @@ func processWork(ctx context.Context, w *work.Work, cfg config.Process) error {
 				err = fmt.Errorf("exceeded %d retries: %w", cfg.MaxRetries, err)
 			} else if errors.As(err, &errIgnored) {
 				// go to the next loop iteration, no need for a delay when ignoring a repeatedly failed entry
-				continue
-			} else if errors.As(err, &errSetupTriggerFound) {
-				if err := writeToAllPaths(cfg.App, false); err != nil {
-					return fmt.Errorf("failed to trigger permission requests: %w", err)
-				}
 				continue
 			}
 			return fmt.Errorf("failed to get next work entry: %w", err)

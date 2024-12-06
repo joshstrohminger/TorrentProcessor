@@ -14,6 +14,9 @@ import (
 	"github.com/spf13/viper"
 )
 
+const setupFlagName = ".setup"
+const setupTestName = "." + app.ShortName
+
 var setupCmd = &cobra.Command{
 	Use:               "setup",
 	Aliases:           []string{"init"},
@@ -35,21 +38,34 @@ var setupCmd = &cobra.Command{
 
 		fmt.Println("Setup is valid:", viper.ConfigFileUsed())
 
-		if err := writeToAllPaths(appCfg, queue); err != nil {
+		if err := writeToAllPaths(appCfg); err != nil {
 			return err
 		}
 
 		fmt.Println("All directories are accessible")
 
+		if queue {
+			path := getSetupFlagPath()
+			file, err := os.Create(path)
+			if err != nil {
+				return fmt.Errorf("failed to create setup flag file %s: %w", path, err)
+			}
+			return file.Close()
+		}
+
 		return nil
 	},
 }
 
+func getSetupFlagPath() string {
+	return filepath.Join(config.GetUserAppConfigDir(), setupFlagName)
+}
+
 // TODO this won't take care of permissions associated with torrent content paths since we don't know what any of those are
 // perhaps we should also define the default content path to ensure we have access to it
-func writeToAllPaths(appCfg config.App, queue bool) error {
+func writeToAllPaths(appCfg config.App) error {
 	if err := appCfg.VisitPaths(func(name, dir string) error {
-		path := filepath.Join(dir, app.SetupTriggerName)
+		path := filepath.Join(dir, setupTestName)
 
 		file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND, 0666)
 		if err != nil {
@@ -58,12 +74,8 @@ func writeToAllPaths(appCfg config.App, queue bool) error {
 		if err := file.Close(); err != nil {
 			return fmt.Errorf("failed to close file %s: %w", path, err)
 		}
-
-		// don't remove the file for the workpath if we need to queue setup to run again
-		if !queue || dir != appCfg.WorkPath {
-			if err := os.Remove(path); err != nil {
-				return fmt.Errorf("failed to remove file %s: %w", path, err)
-			}
+		if err := os.Remove(path); err != nil {
+			return fmt.Errorf("failed to remove file %s: %w", path, err)
 		}
 		return nil
 	}); err != nil {
@@ -73,7 +85,22 @@ func writeToAllPaths(appCfg config.App, queue bool) error {
 	return nil
 }
 
+func mkDirs(paths ...string) error {
+	for _, path := range paths {
+		if err := os.MkdirAll(path, 0755); err != nil {
+			return fmt.Errorf("failed to create director %s: %w", path, err)
+		}
+	}
+	return nil
+}
+
 func setupAppConfig(cmd *cobra.Command) (config.App, error) {
+	// create the non-configurable directories
+	defaultCfg := config.Default()
+	if err := mkDirs(defaultCfg.WorkPath, defaultCfg.LogPath); err != nil {
+		return defaultCfg, err
+	}
+
 	for {
 		viper.Reset()
 		appCfg, err := getAppConfig(cmd)
@@ -85,12 +112,7 @@ func setupAppConfig(cmd *cobra.Command) (config.App, error) {
 		// create config file if it doesn't exist
 		var notFound viper.ConfigFileNotFoundError
 		if errors.As(err, &notFound) {
-			dir, err := getUserAppCfgDir()
-			if err != nil {
-				return appCfg, err
-			}
-
-			path := filepath.Join(dir, app.ShortName+config.Ext)
+			path := filepath.Join(config.GetUserAppConfigDir(), app.ShortName+config.Ext)
 
 			if _, err := os.Stat(path); err == nil {
 				return appCfg, fmt.Errorf("config file %s already exists", path)

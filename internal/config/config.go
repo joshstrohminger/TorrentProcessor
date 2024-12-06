@@ -5,24 +5,50 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
 
+	"github.com/joshstrohminger/TorrentProcessor/internal/app"
 	"gopkg.in/yaml.v3"
 )
 
 const Ext = ".yaml"
+const WorkSubDir = "Work"
+const LogsSubDir = "Logs"
 
 type App struct {
-	WorkPath        string        `yaml:"workPath"`
+	WorkPath        string        `yaml:"-"`
+	LogPath         string        `yaml:"-"`
 	MovieOutputPath string        `yaml:"movieOutputPath"`
 	TvOutputPath    string        `yaml:"tvOutputPath"`
 	ContentPath     string        `yaml:"contentPath"`
-	LogPath         string        `yaml:"logPath"`
 	DormantPeriod   time.Duration `yaml:"dormantPeriod"`
 	MaxRetries      int           `yaml:"maxRetries"`
 	Api             Api           `yaml:"api"`
+}
+
+func GetUserAppConfigDir() string {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		panic(fmt.Errorf("failed to get user config dir: %w", err))
+	}
+	return filepath.Join(dir, app.LongName)
+}
+
+func Default() App {
+	appConfigDir := GetUserAppConfigDir()
+	return App{
+		WorkPath:      filepath.Join(appConfigDir, WorkSubDir),
+		LogPath:       filepath.Join(appConfigDir, LogsSubDir),
+		MaxRetries:    5,
+		DormantPeriod: time.Minute,
+		Api: Api{
+			Host: "localhost",
+			Port: 8080,
+		},
+	}
 }
 
 func (cfg App) Marshal() ([]byte, error) {

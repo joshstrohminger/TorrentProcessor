@@ -13,6 +13,7 @@ var configCmd = &cobra.Command{
 	Use:               "config",
 	Short:             "Interact with configuration",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error { return nil },
+	Args:              cobra.NoArgs,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if _, err := getAppConfig(cmd); err != nil {
@@ -61,9 +62,30 @@ var listConfigCmd = &cobra.Command{
 	},
 }
 
+var getConfigCmd = &cobra.Command{
+	Use:               "get key",
+	Aliases:           []string{"query", "read"},
+	Short:             "Get a config value by key",
+	Args:              cobra.ExactArgs(1),
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error { return nil },
+
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cmd.SilenceUsage = true
+
+		_, err := getAppConfig(cmd)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(viper.Get(args[0]))
+
+		return nil
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(configCmd)
 
 	listConfigCmd.Flags().Bool("yaml", false, "Output as YAML")
-	configCmd.AddCommand(listConfigCmd)
+	configCmd.AddCommand(listConfigCmd, getConfigCmd)
 }

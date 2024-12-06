@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"runtime"
 	"runtime/debug"
 	"slices"
 	"strings"
@@ -88,47 +87,8 @@ func Execute() {
 	}
 }
 
-func getOsLogDir() (dir string, err error) {
-	switch runtime.GOOS {
-	case "windows":
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("failed to get user home dir: %w", err)
-		}
-		return filepath.Join(home, "AppData", "Local"), nil
-
-	case "darwin":
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("failed to get user home dir: %w", err)
-		}
-		return filepath.Join(home, "Library", "Logs"), nil
-
-	case "linux":
-		return "/var/log/tp", nil
-
-	default:
-		return "", fmt.Errorf("unsupported GOOS %s", runtime.GOOS)
-	}
-}
-
-func getUserAppCfgDir() (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", fmt.Errorf("failed to get user config dir: %w", err)
-	}
-	return filepath.Join(dir, app.LongName), nil
-}
-
 func getAppConfig(cmd *cobra.Command) (config.App, error) {
-	cfg := config.App{
-		MaxRetries:    5,
-		DormantPeriod: time.Minute,
-		Api: config.Api{
-			Host: "localhost",
-			Port: 8080,
-		},
-	}
+	cfg := config.Default()
 
 	configPath, err := cmd.Flags().GetString("config")
 	if err != nil {
@@ -146,9 +106,7 @@ func getAppConfig(cmd *cobra.Command) (config.App, error) {
 			viper.AddConfigPath(configPath)
 		}
 
-		if dir, err := getUserAppCfgDir(); err == nil {
-			viper.AddConfigPath(dir)
-		}
+		viper.AddConfigPath(config.GetUserAppConfigDir())
 
 		if dir, err := os.UserHomeDir(); err == nil {
 			viper.AddConfigPath(dir)
@@ -180,19 +138,6 @@ func getAppConfig(cmd *cobra.Command) (config.App, error) {
 		decoderConfig.ErrorUnused = true
 	}); err != nil {
 		return cfg, fmt.Errorf("failed to unmarshal config: %w", err)
-	}
-
-	if cfg.LogPath == "" {
-		cfg.LogPath, err = getOsLogDir()
-		if err != nil {
-			return cfg, err
-		}
-	}
-
-	if cfg.WorkPath == "" {
-		if dir, err := getUserAppCfgDir(); err == nil {
-			cfg.WorkPath = filepath.Join(dir, "Work")
-		}
 	}
 
 	if err = cfg.Validate(); err != nil {

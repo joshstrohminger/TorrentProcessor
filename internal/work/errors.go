@@ -24,11 +24,3 @@ func (e ErrIgnored) Error() string {
 	}
 	return fmt.Sprintf("ignored '%s'", e.FileName)
 }
-
-type ErrSetupTriggerFound struct {
-	Filepath string
-}
-
-func (e ErrSetupTriggerFound) Error() string {
-	return fmt.Sprintf("found setup trigger file '%s'", e.Filepath)
-}
