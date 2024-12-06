@@ -134,6 +134,10 @@ func getAppConfig(cmd *cobra.Command) (config.App, error) {
 		return cfg, fmt.Errorf("failed to read config file %s: %w", configPath, err)
 	}
 
+	def := config.Default()
+	viper.Set("workpath", def.WorkPath)
+	viper.Set("logpath", def.LogPath)
+
 	if err = viper.Unmarshal(&cfg, func(decoderConfig *mapstructure.DecoderConfig) {
 		decoderConfig.ErrorUnused = true
 	}); err != nil {
