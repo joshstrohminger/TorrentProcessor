@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"github.com/joshstrohminger/TorrentProcessor/internal/app"
+	"github.com/joshstrohminger/TorrentProcessor/internal/logs"
 	"github.com/spf13/cobra"
 )
 
-const logNameFormat = app.ShortName + ".%s.log"
 const debugLogName = app.ShortName + ".debug.log"
 
 var logsCmd = &cobra.Command{
@@ -48,7 +48,7 @@ var listLogsCmd = &cobra.Command{
 			return err
 		}
 
-		files, err := filepath.Glob(filepath.Join(cfg.LogPath, fmt.Sprintf(logNameFormat, "*")))
+		files, err := filepath.Glob(filepath.Join(cfg.LogPath, fmt.Sprintf(logs.NameFormat, "*")))
 		if err != nil {
 			return err
 		}
@@ -109,7 +109,7 @@ var summarizeLogsCmd = &cobra.Command{
 			limit *= -1
 		}
 
-		files, err := filepath.Glob(filepath.Join(cfg.LogPath, fmt.Sprintf(logNameFormat, "*")))
+		files, err := filepath.Glob(filepath.Join(cfg.LogPath, fmt.Sprintf(logs.NameFormat, "*")))
 		if err != nil {
 			return err
 		}

@@ -6,6 +6,7 @@ toolchain go1.23.3
 
 require (
 	github.com/anacrolix/torrent v1.58.0
+	github.com/caseymrm/menuet v1.0.3
 	github.com/dustin/go-humanize v1.0.1
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/samber/slog-multi v1.2.4
@@ -26,6 +27,7 @@ require (
 require (
 	github.com/anacrolix/missinggo v1.3.0 // indirect
 	github.com/anacrolix/missinggo/v2 v2.7.4 // indirect
+	github.com/caseymrm/askm v1.0.0 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/huandu/xstrings v1.3.2 // indirect
@@ -44,6 +46,7 @@ require (
 	golang.org/x/net v0.31.0 // indirect
 	golang.org/x/sync v0.9.0 // indirect
 	golang.org/x/sys v0.27.0 // indirect
+	golang.org/x/time v0.8.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 )

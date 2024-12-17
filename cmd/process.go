@@ -5,22 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"os"
 	"os/signal"
-	"sync"
-	"syscall"
 	"time"
 
-	"github.com/joshstrohminger/TorrentProcessor/internal/api"
 	"github.com/joshstrohminger/TorrentProcessor/internal/config"
 	"github.com/joshstrohminger/TorrentProcessor/internal/torrent"
 	"github.com/joshstrohminger/TorrentProcessor/internal/work"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 var processCmd = &cobra.Command{
@@ -153,121 +145,5 @@ func processWork(ctx context.Context, w *work.Work, cfg config.Process) error {
 				}
 			}
 		}
-	}
-}
-
-type Server struct {
-	api.UnimplementedControlServiceServer
-
-	config  config.App
-	started time.Time
-	exit    chan int
-
-	mu         sync.Mutex
-	grpcServer *grpc.Server
-}
-
-func newServer(config config.App) *Server {
-	return &Server{
-		config:  config,
-		exit:    make(chan int, 1),
-		started: time.Now(),
-	}
-}
-
-func (s *Server) run() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.grpcServer != nil {
-		return fmt.Errorf("already running")
-	}
-
-	lis, err := net.Listen("tcp", s.config.Api.String())
-	if err != nil {
-		return fmt.Errorf("failed to listen to %s: %w", s.config.Api, err)
-	}
-
-	s.grpcServer = grpc.NewServer()
-	api.RegisterControlServiceServer(s.grpcServer, s)
-
-	go func() {
-		if err := s.grpcServer.Serve(lis); err != nil {
-			logger.LogAttrs(rootCmd.Context(), slog.LevelError, "gRPC server failed", slog.Any("error", err))
-		}
-		s.mu.Lock()
-		defer s.mu.Unlock()
-
-		s.grpcServer = nil
-	}()
-
-	return nil
-}
-
-func (s *Server) stop() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.grpcServer != nil {
-		logger.Debug("Stopping gRPC server")
-
-		ctx, timeoutCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer timeoutCancel()
-
-		ctx, sigCancel := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
-		defer sigCancel()
-
-		stopped := make(chan struct{})
-
-		go func() {
-			logger.Debug("Force stopping gRPC server")
-			s.grpcServer.GracefulStop()
-			close(stopped)
-		}()
-
-		select {
-		case <-ctx.Done():
-			s.grpcServer.Stop()
-		case <-stopped:
-		}
-	}
-
-	s.grpcServer = nil
-}
-
-func (s *Server) GetConfig(context.Context, *api.Empty) (*api.Config, error) {
-	return &api.Config{
-		WorkPath:        s.config.WorkPath,
-		MovieOutputPath: s.config.MovieOutputPath,
-		TvOutputPath:    s.config.TvOutputPath,
-		DormantPeriod:   durationpb.New(s.config.DormantPeriod),
-		MaxRetries:      uint32(s.config.MaxRetries),
-	}, nil
-}
-
-func (s *Server) Check(context.Context, *api.Empty) (*api.ProcessingStatus, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Check not implemented")
-}
-
-func (s *Server) Stop(context.Context, *api.Empty) (*api.ProcessingStatus, error) {
-	logger.Info("Stopping")
-	s.stop()
-	s.exit <- 0
-	return s.status(), nil
-}
-
-func (s *Server) Restart(context.Context, *api.Empty) (*api.ProcessingStatus, error) {
-	logger.Info("Restarting")
-	s.stop()
-	s.exit <- 1
-	return s.status(), nil
-}
-
-func (s *Server) status() *api.ProcessingStatus {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	return &api.ProcessingStatus{
-		Running: s.grpcServer != nil,
 	}
 }

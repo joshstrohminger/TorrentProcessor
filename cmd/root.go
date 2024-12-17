@@ -13,6 +13,7 @@ import (
 
 	"github.com/joshstrohminger/TorrentProcessor/internal/app"
 	"github.com/joshstrohminger/TorrentProcessor/internal/config"
+	"github.com/joshstrohminger/TorrentProcessor/internal/logs"
 	"github.com/joshstrohminger/TorrentProcessor/internal/util"
 	"github.com/mitchellh/mapstructure"
 	slogmulti "github.com/samber/slog-multi"
@@ -47,7 +48,7 @@ var rootCmd = &cobra.Command{
 			return err
 		}
 
-		relPath := filepath.Join(cfg.LogPath, fmt.Sprintf(logNameFormat, cmd.Name()))
+		relPath := filepath.Join(cfg.LogPath, fmt.Sprintf(logs.NameFormat, cmd.Name()))
 		path, err := filepath.Abs(relPath)
 		if err != nil {
 			return fmt.Errorf("failed to get absolute path for log file from %s: %w", relPath, err)

@@ -1,28 +1,24 @@
-syntax = "proto3";
+edition = "2023";
 
 import "google/protobuf/duration.proto";
 
 option go_package = "github.com/joshstrohminger/TorrentProcessor/internal/api";
 
 service ControlService {
-  rpc Check(Empty) returns (ProcessingStatus);
-  rpc Stop(Empty) returns (ProcessingStatus);
-  rpc Restart(Empty) returns (ProcessingStatus);
-  rpc GetConfig(Empty) returns (Config);
+  rpc Refresh(RefreshRequest) returns (Empty);
 }
 
 message Empty {}
 
-message ProcessingStatus {
-  bool found = 1;
-  bool running = 2;
-  repeated string errors = 3;
-}
+message RefreshRequest {
+  Reason reason = 1;
+  google.protobuf.Duration when = 2;
 
-message Config {
-    string work_path = 1;
-    string movie_output_path = 2;
-    string tv_output_path = 3;
-    uint32 max_retries = 4;
-    google.protobuf.Duration dormant_period = 5;
+  enum Reason {
+    Added = 0;
+    Processing = 1;
+    Processed = 2;
+    Error = 3;
+    Warning = 4;
+  }
 }
