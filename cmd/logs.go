@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"time"
@@ -73,17 +72,7 @@ var viewLogsCmd = &cobra.Command{
 			return err
 		}
 
-		path, err := exec.LookPath("code")
-		if err != nil {
-			return fmt.Errorf("can't find VsCode app (code) in the path")
-		}
-
-		out, err := exec.Command(path, cfg.LogPath).CombinedOutput()
-		output := string(out)
-		if output != "" {
-			fmt.Println(output)
-		}
-		return err
+		return logs.View(cfg)
 	},
 }
 

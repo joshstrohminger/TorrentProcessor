@@ -26,10 +26,11 @@ var subtitleExts = []string{".srt", ".smi", ".ssa", ".ass", ".vtt"}
 type Processor struct {
 	cfg    config.Process
 	logger *slog.Logger
+	warned func()
 }
 
-func NewProcessor(cfg config.Process, logger *slog.Logger) *Processor {
-	return &Processor{cfg, logger}
+func NewProcessor(cfg config.Process, logger *slog.Logger, warned func()) *Processor {
+	return &Processor{cfg, logger, warned}
 }
 
 var ErrManualProcessing = errors.New("manual handling required")
@@ -107,6 +108,7 @@ func (p *Processor) copyMovieSingle(ctx context.Context, entry Entry) error {
 			ext := filepath.Ext(file)
 			if _, exists := processed[ext]; exists {
 				p.logger.LogAttrs(ctx, slog.LevelWarn, "Subtitle skipped because we've already processed one for this extension", slog.String("subtitle", file))
+				p.warned()
 			}
 			processed[ext] = struct{}{}
 			destination = filepath.Clean(filepath.Join(p.cfg.MovieOutputPath, fmt.Sprintf("%s.en%s", entry.Name, ext)))
@@ -146,7 +148,7 @@ func (p *Processor) copyFile(src string, dst string) error {
 		}
 
 		var buffer []byte
-		const bufferSize = 10 * 1024 * 1024
+		const bufferSize = 20 * 1024 * 1024
 		if size > bufferSize {
 			buffer = make([]byte, bufferSize)
 		}

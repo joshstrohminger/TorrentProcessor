@@ -9,7 +9,9 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/joshstrohminger/TorrentProcessor/internal/api"
 	"github.com/joshstrohminger/TorrentProcessor/internal/config"
+	"github.com/joshstrohminger/TorrentProcessor/internal/menu"
 	"github.com/joshstrohminger/TorrentProcessor/internal/torrent"
 	"github.com/joshstrohminger/TorrentProcessor/internal/work"
 	"github.com/spf13/cobra"
@@ -46,16 +48,21 @@ var processCmd = &cobra.Command{
 					return err
 				}
 
-				if err := os.Remove(flagPath); err == nil {
+				if err := os.Remove(flagPath); err != nil {
 					return fmt.Errorf("failed to remove setup flag file %s: %w", flagPath, err)
 				}
 
 				logger.Debug("Removed setup flag file")
 			}
 
-			if err := processWork(ctx, work, cfg); err != nil {
-				return fmt.Errorf("failed to process work: %w", err)
+			client := menu.NewClient(appCfg, logger)
+			client.Refresh(ctx, api.RefreshRequest_Processing)
+			if err := processWork(ctx, work, cfg, client); err != nil {
+				err := fmt.Errorf("failed to process work: %w", err)
+				client.Refresh(ctx, api.RefreshRequest_Error)
+				return err
 			}
+			client.Refresh(ctx, api.RefreshRequest_Processed)
 		}
 		return nil
 	},
@@ -67,7 +74,7 @@ func init() {
 	rootCmd.AddCommand(processCmd)
 }
 
-func processWork(ctx context.Context, w *work.Work, cfg config.Process) error {
+func processWork(ctx context.Context, w *work.Work, cfg config.Process, client *menu.Client) error {
 	logger.Info("Watching")
 	delays := []time.Duration{
 		time.Second,
@@ -77,7 +84,7 @@ func processWork(ctx context.Context, w *work.Work, cfg config.Process) error {
 		30 * time.Second,
 	}
 	retries := 0
-	processor := torrent.NewProcessor(cfg, logger)
+	processor := torrent.NewProcessor(cfg, logger, func() { client.Refresh(ctx, api.RefreshRequest_Warning) })
 
 	doneHandler := w.Remove
 	if cfg.DryRun {
@@ -102,6 +109,7 @@ func processWork(ctx context.Context, w *work.Work, cfg config.Process) error {
 					}
 					retries++
 					logger.LogAttrs(ctx, slog.LevelWarn, "Failed to get next work entry", slog.Any("error", err), slog.Int("attempt", retries), slog.Int("max", cfg.MaxRetries), slog.Duration("delay", delay))
+					client.Refresh(ctx, api.RefreshRequest_Warning)
 
 					select {
 					case <-time.After(delay):

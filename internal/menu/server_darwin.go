@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime/debug"
 	"slices"
@@ -30,9 +29,14 @@ const debounce = 5 * time.Second
 const debounceLimit = time.Minute
 const historyLengthLimit = 20
 
+type HistoryItem struct {
+	When   time.Time `json:"when"`
+	Reason string    `json:"reason"`
+}
+
 type RunData struct {
-	LastLogTime time.Time             `json:"lastLogTime"`
-	History     []*api.RefreshRequest `json:"history"`
+	LastLogTime time.Time      `json:"lastLogTime,omitempty"`
+	History     []*HistoryItem `json:"history,omitempty"`
 }
 
 func (r *RunData) filename() string {
@@ -108,10 +112,14 @@ func NewServer(config config.App, logger *slog.Logger) *Server {
 
 func (s *Server) update(req *api.RefreshRequest) {
 	if req != nil {
+		item := &HistoryItem{
+			When:   req.GetWhen().AsTime(),
+			Reason: req.GetReason().String(),
+		}
 		if len(s.runData.History) >= historyLengthLimit {
-			s.runData.History = append(s.runData.History[len(s.runData.History)-historyLengthLimit:], req)
+			s.runData.History = append(s.runData.History[len(s.runData.History)-historyLengthLimit:], item)
 		} else {
-			s.runData.History = append(s.runData.History, req)
+			s.runData.History = append(s.runData.History, item)
 		}
 	}
 
@@ -130,17 +138,16 @@ func (s *Server) update(req *api.RefreshRequest) {
 		case slog.LevelDebug:
 			//ignore
 		case slog.LevelInfo:
-			s.status.infoLogs = count
+			s.status.infoLogs += count
 		case slog.LevelWarn:
-			s.status.warningLogs = count
+			s.status.warningLogs += count
 		case slog.LevelError:
-			s.status.errorLogs = count
+			s.status.errorLogs += count
 		default:
+			s.status.warningLogs += 1
 			s.logger.LogAttrs(context.Background(), slog.LevelWarn, "Unhandled log level for status", slog.String("level", level.String()), slog.Int("level-int", int(level)))
 		}
 	}
-
-	s.runData.LastLogTime = time.Now()
 
 	s.status.queued, err = logs.CountQueued(s.config)
 	if err != nil {
@@ -161,20 +168,43 @@ func (s *Server) Run() error {
 		return err
 	}
 
+	debounceTimer := time.NewTimer(time.Minute)
+	debounceTimer.Stop()
+	var firstBounce time.Time
+
+	save := func() {
+		if err := s.runData.save(); err != nil {
+			s.logger.LogAttrs(context.Background(), slog.LevelError, "failed to save run data", slog.Any("error", err))
+		}
+		firstBounce = time.Time{}
+		debounceTimer.Stop()
+	}
+
+	viewLogs := func() {
+		if err := logs.View(s.config); err != nil {
+			s.logger.LogAttrs(context.Background(), slog.LevelError, "failed to view logs", slog.Any("error", err))
+		}
+	}
+
 	label, err := getAppLabel()
 	if err != nil {
 		return err
 	}
-	menuet.App().Label = label
-	menuet.App().SetMenuState(&menuet.MenuState{Title: app.LongName})
+	menuet.App().Label = label + ".menu"
+	menuet.App().SetMenuState(&menuet.MenuState{Title: app.LongName, Image: "logo"})
 	menuet.App().Children = func() []menuet.MenuItem {
-		const timeFormat = "Jan 2, 2006 at 3:04:05 PM"
-
 		s.mu.Lock()
 		defer s.mu.Unlock()
 
+		refreshItem := menuet.MenuItem{Text: "Refresh", Clicked: func() {
+			s.refresh <- nil
+		}}
+
 		if s.status.updated.IsZero() {
-			return []menuet.MenuItem{{Text: "Updated: never"}}
+			return []menuet.MenuItem{
+				{Text: "Updated: never"},
+				refreshItem,
+			}
 		}
 
 		running := "idle"
@@ -182,29 +212,48 @@ func (s *Server) Run() error {
 			running = "running"
 		}
 
-		var viewLogs func()
-		vsCodePath, err := exec.LookPath("code")
-		if err == nil {
-			viewLogs = func() {
-				_, err := exec.Command(vsCodePath, s.config.LogPath).CombinedOutput()
-				if err != nil {
-					s.logger.LogAttrs(context.Background(), slog.LevelError, "Failed to open VsCode", slog.Any("error", err))
-				}
-			}
-		} else {
-			s.logger.LogAttrs(context.Background(), slog.LevelWarn, "Failed to find VsCode path", slog.Any("error", err))
+		since := "forever"
+		if !s.runData.LastLogTime.IsZero() {
+			since = s.runData.LastLogTime.Format(app.TimeFormat)
 		}
 
-		return []menuet.MenuItem{
-			{Text: fmt.Sprintf("Updated: %s", s.status.updated.Format(timeFormat))},
+		warnWeight := menuet.FontWeight(menuet.WeightRegular)
+		if s.status.warningLogs > 0 {
+			warnWeight = menuet.WeightSemibold
+		}
+
+		errorWeight := menuet.FontWeight(menuet.WeightRegular)
+		if s.status.errorLogs > 0 {
+			errorWeight = menuet.WeightBlack
+		}
+
+		items := []menuet.MenuItem{
+			{Text: fmt.Sprintf("Updated: %s", s.status.updated.Format(app.TimeFormat))},
+			refreshItem,
 			{Type: menuet.Separator},
 			{Text: fmt.Sprintf("Daemon: %s", running)},
 			{Text: fmt.Sprintf("Queued: %d", s.status.queued)},
 			{Type: menuet.Separator},
+			{Text: fmt.Sprintf("Since: %s", since)},
 			{Text: fmt.Sprintf("Info: %d", s.status.infoLogs), Clicked: viewLogs},
-			{Text: fmt.Sprintf("Warning: %d", s.status.warningLogs), Clicked: viewLogs},
-			{Text: fmt.Sprintf("Error: %d", s.status.errorLogs), Clicked: viewLogs},
+			{Text: fmt.Sprintf("Warning: %d", s.status.warningLogs), Clicked: viewLogs, FontWeight: warnWeight},
+			{Text: fmt.Sprintf("Error: %d", s.status.errorLogs), Clicked: viewLogs, FontWeight: errorWeight},
+			{Text: "Ignore", Clicked: func() {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				s.runData.LastLogTime = time.Now()
+				save()
+				s.refresh <- nil
+			}},
 		}
+		if len(s.runData.History) > 0 {
+			items = slices.Grow(items, len(s.runData.History)+2)
+			items = append(items, menuet.MenuItem{Type: menuet.Separator}, menuet.MenuItem{Text: "History"})
+			for _, history := range s.runData.History {
+				items = append(items, menuet.MenuItem{Text: fmt.Sprintf("%s: %s", history.Reason, history.When.Format(app.TimeFormat))})
+			}
+		}
+		return items
 	}
 
 	if s.grpcServer != nil {
@@ -229,18 +278,6 @@ func (s *Server) Run() error {
 		s.grpcServer = nil
 	}()
 
-	debounceTimer := time.NewTimer(time.Minute)
-	debounceTimer.Stop()
-	var firstBounce time.Time
-
-	save := func() {
-		if err := s.runData.save(); err != nil {
-			s.logger.LogAttrs(context.Background(), slog.LevelError, "failed to save run data", slog.Any("error", err))
-		}
-		firstBounce = time.Time{}
-		debounceTimer.Stop()
-	}
-
 	wg, ctx := menuet.App().GracefulShutdownHandles()
 	wg.Add(1)
 
@@ -263,6 +300,9 @@ func (s *Server) Run() error {
 
 			case req := <-s.refresh:
 				s.update(req)
+				if req == nil {
+					continue
+				}
 
 				if firstBounce.IsZero() {
 					firstBounce = time.Now()
@@ -273,9 +313,22 @@ func (s *Server) Run() error {
 					debounceTimer.Reset(debounce)
 				}
 
+				menuet.App().Notification(menuet.Notification{
+					Identifier:   req.GetHash(),
+					Title:        req.GetReason().String(),
+					Subtitle:     req.GetName(),
+					Message:      req.GetWhen().AsTime().Format(app.TimeFormat),
+					ActionButton: "Logs",
+				})
 			}
 		}
 	}()
+
+	menuet.App().NotificationResponder = func(id, response string) {
+		if response == "" && viewLogs != nil {
+			viewLogs()
+		}
+	}
 
 	menuet.App().RunApplication()
 	return nil

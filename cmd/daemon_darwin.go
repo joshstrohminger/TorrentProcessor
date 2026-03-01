@@ -29,6 +29,7 @@ var daemonCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		info.Label += ".process"
 
 		info.Queued, err = countQueued(cmd)
 		if err != nil {
@@ -56,6 +57,7 @@ var daemonRunCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		info.Label += ".process"
 
 		if !info.Installed {
 			return fmt.Errorf("daemon is not installed")
@@ -91,6 +93,7 @@ var daemonStartCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		info.Label += ".process"
 
 		if debug, err := cmd.Flags().GetBool("debug"); err != nil {
 			return err
@@ -108,7 +111,7 @@ var daemonStartCmd = &cobra.Command{
 
 		if info.Installed {
 			fmt.Println("Daemon is already installed at", info.Path)
-		} else if err := daemon.InstallPlist(info, cfg); err != nil {
+		} else if err := daemon.InstallPlist(info, cfg, version); err != nil {
 			return fmt.Errorf("failed to install daemon: %w", err)
 		} else {
 			fmt.Println("Daemon installed at", info.Path)
@@ -143,6 +146,7 @@ var daemonStopCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		info.Label += ".process"
 
 		if !info.Enabled {
 			fmt.Println("Daemon is already disabled")

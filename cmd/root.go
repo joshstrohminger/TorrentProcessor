@@ -158,10 +158,8 @@ func init() {
 	rootCmd.Long = rootCmd.Short + "\n" + longDescription
 
 	if exe, err := os.Executable(); err == nil {
-		const timeFormat = "Jan 2, 2006 at 3:04:05 PM"
-
 		if info, err := os.Stat(exe); err == nil {
-			rootCmd.Version = fmt.Sprintf("%s, built %s", rootCmd.Version, info.ModTime().Format(timeFormat))
+			rootCmd.Version = fmt.Sprintf("%s, built %s", rootCmd.Version, info.ModTime().Format(app.TimeFormat))
 		}
 
 		if info, ok := debug.ReadBuildInfo(); ok {
@@ -180,7 +178,7 @@ func init() {
 				}
 
 				if revisionTime, err := time.Parse(time.RFC3339, revisionTimeString); err == nil {
-					revisionTimeString = revisionTime.Local().Format(timeFormat)
+					revisionTimeString = revisionTime.Local().Format(app.TimeFormat)
 				}
 
 				rootCmd.Version = fmt.Sprintf("%s, from ref %s%s, committed %s", rootCmd.Version, revision, dirtyLabel, revisionTimeString)

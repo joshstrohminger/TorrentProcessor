@@ -14,6 +14,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/joshstrohminger/TorrentProcessor/internal/app"
 	"github.com/joshstrohminger/TorrentProcessor/internal/config"
 )
 
@@ -21,9 +22,11 @@ import (
 var plistTemplate string
 
 type TemplateData struct {
-	Exe    string
-	Info   Info
-	Config config.App
+	Exe     string
+	Info    Info
+	Config  config.App
+	Version string
+	Name    string
 }
 
 type Info struct {
@@ -39,7 +42,7 @@ type Info struct {
 	Queued       int
 }
 
-func InstallPlist(info Info, cfg config.App) error {
+func InstallPlist(info Info, cfg config.App, version string) error {
 	exe, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to get executable path: %w", err)
@@ -56,7 +59,7 @@ func InstallPlist(info Info, cfg config.App) error {
 	}
 	defer file.Close()
 
-	if err = tmpl.Execute(file, TemplateData{exe, info, cfg}); err != nil {
+	if err = tmpl.Execute(file, TemplateData{exe, info, cfg, version, app.LongName}); err != nil {
 		return fmt.Errorf("failed to execute plist template: %w", err)
 	}
 
@@ -71,13 +74,14 @@ func GetInfo() (Info, error) {
 	if err != nil {
 		return info, err
 	}
+	label := info.Label + ".process"
 
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return info, fmt.Errorf("failed to get user home directory: %w", err)
 	}
 
-	info.Path = filepath.Join(home, "Library", "LaunchAgents", info.Label+".plist")
+	info.Path = filepath.Join(home, "Library", "LaunchAgents", label+".plist")
 	if _, err = os.Stat(info.Path); err == nil {
 		info.Installed = true
 	} else if !errors.Is(err, fs.ErrNotExist) {
@@ -87,7 +91,7 @@ func GetInfo() (Info, error) {
 			return info, fmt.Errorf("failed to list existing daemons: %w", err)
 		}
 
-		info.Conflict, err = regexp.Match(`\s`+info.Label+`(\s|$)`, out)
+		info.Conflict, err = regexp.Match(`\s`+label+`(\s|$)`, out)
 		if err != nil {
 			return info, fmt.Errorf("failed to check for existing daemons: %w", err)
 		}
@@ -100,7 +104,7 @@ func GetInfo() (Info, error) {
 		return info, err
 	}
 	info.Domain = fmt.Sprintf("gui/%s", id)
-	info.Name = fmt.Sprintf("%s/%s", info.Domain, info.Label)
+	info.Name = fmt.Sprintf("%s/%s", info.Domain, label)
 
 	if info.Installed {
 		info.Enabled, info.Running, err = getStatus(info.Name)

@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/joshstrohminger/TorrentProcessor/internal/api"
 	"github.com/joshstrohminger/TorrentProcessor/internal/config"
+	"github.com/joshstrohminger/TorrentProcessor/internal/menu"
 	"github.com/joshstrohminger/TorrentProcessor/internal/torrent"
 	"github.com/joshstrohminger/TorrentProcessor/internal/work"
 	"github.com/spf13/cobra"
@@ -40,6 +42,8 @@ var addCmd = &cobra.Command{
 		} else if process, err := cmd.Flags().GetBool("process"); err != nil {
 			return err
 		} else {
+			client := menu.NewClient(cfg, logger)
+
 			entry := torrent.Entry{
 				Name:          trimQuotes(name),
 				Category:      category,
@@ -51,14 +55,21 @@ var addCmd = &cobra.Command{
 				SavePath:      trimQuotes(savePath),
 			}
 			if err := work.Add(entry); err != nil {
-				return fmt.Errorf("failed to add entry %#v: %w", entry, err)
+				err = fmt.Errorf("failed to add entry %#v: %w", entry, err)
+				client.Refresh(cmd.Context(), api.RefreshRequest_Error)
+				return err
 			}
 
+			client.Refresh(cmd.Context(), api.RefreshRequest_Added)
+
 			if process {
-				processor := torrent.NewProcessor(config.Process{App: cfg}, logger)
+				processor := torrent.NewProcessor(config.Process{App: cfg}, logger, func() { client.Refresh(cmd.Context(), api.RefreshRequest_Warning) })
 				if err := processor.Process(cmd.Context(), entry); err != nil {
-					return fmt.Errorf("failed to process entry: %w", err)
+					err = fmt.Errorf("failed to process entry: %w", err)
+					client.Refresh(cmd.Context(), api.RefreshRequest_Error)
+					return err
 				}
+				client.Refresh(cmd.Context(), api.RefreshRequest_Processed)
 			}
 		}
 		return nil
